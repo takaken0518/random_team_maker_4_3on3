@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>スマブラ3on3 UNIT DRAFT | チームドラフト配信ステージ</title>
+  <meta name="description" content="大乱闘スマッシュブラザーズ SPECIAL チーム戦大会向けのドラフト・ルーレット配信ツール">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&family=Noto+Sans+JP:wght@500;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="index.css">
+</head>
+<body class="bg-dark">
+
+  <canvas id="confetti-canvas" aria-hidden="true"></canvas>
+  <div class="bg-hex" aria-hidden="true"></div>
+  <div class="bg-scan" aria-hidden="true"></div>
+
+  <div id="app-container">
+
+    <!-- ヘッダー -->
+    <header id="header" class="panel">
+      <div class="title-area">
+        <svg class="logo-hex" viewBox="0 0 48 48" aria-hidden="true">
+          <polygon points="24,2 44,13 44,35 24,46 4,35 4,13" />
+          <polygon points="24,11 36,18 36,30 24,37 12,30 12,18" />
+        </svg>
+        <div>
+          <div class="title-kicker">SMASH RANK BATTLE // TEAM SELECTION SYSTEM</div>
+          <h1 class="main-title">UNIT DRAFT</h1>
+        </div>
+      </div>
+      <div class="header-stats">
+        <div class="stat">
+          <div class="stat-label">DRAFTED</div>
+          <div class="stat-value"><span id="progress-current">0</span><small>/<span id="progress-total">0</span></small></div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">UNITS</div>
+          <div class="stat-value" id="stat-units">0</div>
+        </div>
+        <div class="progress-track" aria-hidden="true">
+          <div class="progress-fill" id="progress-bar-fill"></div>
+        </div>
+      </div>
+    </header>
+
+    <!-- ルーレットステージ -->
+    <section id="stage-area" aria-label="ドラフトルーレット">
+      <div class="stage-card panel" id="stage-card">
+        <div class="stage-meta">
+          <div class="stage-target">
+            <span class="meta-label">TARGET UNIT</span>
+            <span class="stage-team" id="stage-team">----</span>
+            <span class="stage-slot" id="stage-slot"></span>
+          </div>
+          <div class="stage-status" id="stage-status">STANDBY</div>
+          <div class="stage-remaining">
+            <span class="meta-label">REMAINING</span>
+            <span class="stage-remaining-value" id="stage-remaining">0</span>
+          </div>
+        </div>
+
+        <div class="stage-display">
+          <span class="reticle r-tl"></span><span class="reticle r-tr"></span>
+          <span class="reticle r-bl"></span><span class="reticle r-br"></span>
+          <div class="stage-scanline"></div>
+          <div class="stage-player-name" id="stage-player-name">READY</div>
+          <div class="stage-fighter-name" id="stage-fighter-name"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- チーム一覧 -->
+    <main id="teams-container" aria-label="チーム一覧">
+      <div id="teams-grid"></div>
+    </main>
+  </div>
+
+  <!-- 操作バー -->
+  <footer id="control-bar" role="toolbar" aria-label="運営コントローラー">
+    <button type="button" class="btn btn-primary" id="btn-draw-next">
+      <span>▶ 次を抽選</span><span class="shortcut-hint">Space</span>
+    </button>
+    <button type="button" class="btn btn-secondary" id="btn-undo">
+      <span>↩ 1手戻す</span><span class="shortcut-hint">Z</span>
+    </button>
+    <button type="button" class="btn btn-secondary" id="btn-open-participants">
+      <span>👥 参加者・チーム設定</span>
+    </button>
+    <button type="button" class="btn btn-secondary" id="btn-toggle-bg">
+      <span>📺 背景: <strong id="bg-mode-label">ダーク</strong></span>
+    </button>
+    <button type="button" class="btn btn-danger" id="btn-reset">
+      <span>🔄 リセット</span>
+    </button>
+  </footer>
+
+  <!-- 参加者・チーム設定モーダル -->
+  <div class="modal-overlay" id="modal-participants" role="dialog" aria-modal="true" aria-labelledby="modal-title-participants">
+    <div class="modal-container modal-wide">
+      <div class="modal-header">
+        <h2 class="modal-title" id="modal-title-participants">参加者・チーム設定</h2>
+        <button type="button" class="modal-close-btn" id="btn-close-participants" aria-label="閉じる">&times;</button>
+      </div>
+
+      <div class="modal-body modal-columns">
+        <!-- 左: 参加者 -->
+        <section class="modal-col">
+          <h3 class="section-title">参加者 <span class="count-badge" id="player-count">0</span></h3>
+
+          <form class="player-form" id="player-form" autocomplete="off">
+            <input type="text" id="input-player-name" class="form-input" placeholder="名前（必須）" maxlength="40" required>
+            <input type="text" id="input-player-fighter" class="form-input" placeholder="使用キャラ" maxlength="40">
+            <button type="submit" class="btn btn-accent" id="btn-add-player">追加</button>
+            <button type="button" class="btn btn-secondary is-hidden" id="btn-cancel-edit">取消</button>
+          </form>
+
+          <div class="player-tools">
+            <label class="btn btn-secondary btn-sm" for="input-csv-file">📄 CSV読み込み</label>
+            <input type="file" id="input-csv-file" accept=".csv,text/csv" hidden>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-load-sample">サンプル24名</button>
+            <button type="button" class="btn btn-danger btn-sm" id="btn-clear-players">全削除</button>
+          </div>
+          <p class="hint-text">CSV形式: <code>名前,キャラ</code>（1行1名・1行目が「名前,キャラ」なら見出しとして無視）。読み込んだ人は今のリストの末尾に追加されます。</p>
+
+          <ol class="player-list" id="player-list"></ol>
+        </section>
+
+        <!-- 右: チーム設定 -->
+        <section class="modal-col">
+          <h3 class="section-title">チーム編成</h3>
+
+          <div class="form-group">
+            <label class="form-label" for="input-team-count">チーム数</label>
+            <div class="stepper">
+              <button type="button" class="btn btn-secondary stepper-btn" id="btn-team-minus" aria-label="チーム数を減らす">−</button>
+              <input type="number" id="input-team-count" class="form-input stepper-input" min="1" value="8">
+              <button type="button" class="btn btn-secondary stepper-btn" id="btn-team-plus" aria-label="チーム数を増やす">＋</button>
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-team-auto">3人編成に合わせる</button>
+            </div>
+            <div class="validation-notice" id="team-validation"></div>
+            <div class="team-preview" id="team-preview"></div>
+          </div>
+
+          <div class="form-group">
+            <span class="form-label">抽選の順番</span>
+            <div class="radio-stack">
+              <label class="radio-label"><input type="radio" name="draft-order" value="round" checked>
+                <span><strong>ラウンド順</strong>（全チームの1人目 → 2人目 → …）</span></label>
+              <label class="radio-label"><input type="radio" name="draft-order" value="team">
+                <span><strong>チーム完結順</strong>（TEAM Aを全員 → TEAM B → …）</span></label>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <span class="form-label">ルーレットの長さ</span>
+            <div class="radio-row">
+              <label class="radio-label"><input type="radio" name="spin-speed" value="2"> 短め 2秒</label>
+              <label class="radio-label"><input type="radio" name="spin-speed" value="3.5" checked> 標準 3.5秒</label>
+              <label class="radio-label"><input type="radio" name="spin-speed" value="5"> 長め 5秒</label>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="radio-label"><input type="checkbox" id="checkbox-sound" checked> 効果音を鳴らす</label>
+          </div>
+
+          <p class="warn-text" id="apply-warning"></p>
+        </section>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="btn-cancel-participants">キャンセル</button>
+        <button type="button" class="btn btn-primary" id="btn-save-start-draft">適用してドラフトを初期化</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- リセット確認 -->
+  <div class="modal-overlay" id="modal-reset" role="dialog" aria-modal="true" aria-labelledby="modal-title-reset">
+    <div class="modal-container" style="max-width: 460px;">
+      <div class="modal-header">
+        <h2 class="modal-title danger" id="modal-title-reset">リセットの確認</h2>
+        <button type="button" class="modal-close-btn" id="btn-close-reset" aria-label="閉じる">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-text">抽選結果をすべて消して、最初からやり直しますか？<br>
+          <small>参加者とチーム数の設定はそのまま残ります。</small></p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="btn-cancel-reset">キャンセル</button>
+        <button type="button" class="btn btn-danger" id="btn-confirm-reset">リセットする</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 部隊結成演出 -->
+  <div class="formation-overlay" id="formation-overlay" aria-live="polite"></div>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,42 @@
+{
+  "CallerReference": "smash-3on3-draft-deploy-1",
+  "Comment": "Smash 3on3 Unit Draft System",
+  "DefaultRootObject": "index.html",
+  "Origins": {
+    "Quantity": 1,
+    "Items": [
+      {
+        "Id": "smash-3on3-team-draft-s3-origin",
+        "DomainName": "smash-3on3-team-draft-069089525875.s3.ap-northeast-1.amazonaws.com",
+        "OriginPath": "",
+        "CustomHeaders": {
+          "Quantity": 0
+        },
+        "S3OriginConfig": {
+          "OriginAccessIdentity": ""
+        },
+        "OriginAccessControlId": "E56NW1O7DWTUS",
+        "ConnectionAttempts": 3,
+        "ConnectionTimeout": 10
+      }
+    ]
+  },
+  "DefaultCacheBehavior": {
+    "TargetOriginId": "smash-3on3-team-draft-s3-origin",
+    "ViewerProtocolPolicy": "redirect-to-https",
+    "AllowedMethods": {
+      "Quantity": 2,
+      "Items": ["HEAD", "GET"],
+      "CachedMethods": {
+        "Quantity": 2,
+        "Items": ["HEAD", "GET"]
+      }
+    },
+    "Compress": true,
+    "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
+    "SmoothStreaming": false
+  },
+  "Comment": "Smash 3on3 Unit Draft System",
+  "Enabled": true,
+  "PriceClass": "PriceClass_All"
+}
