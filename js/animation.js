@@ -31,6 +31,8 @@ export class AnimationManager {
     this.finaleRunning = false;
     this.rafId = null;
     this.formationSkip = null;
+    this.rouletteSkipRequested = false;
+    this.roulettePhase = null; // 'spin' | 'decode' | null
   }
 
   initCanvas(canvasElement) {
@@ -53,12 +55,28 @@ export class AnimationManager {
   async startRoulette({ candidatePlayers, winner, durationSec = 3.5, nameEl, fighterEl, stageEl }) {
     stageEl.classList.remove('is-locked', 'impact');
     stageEl.classList.add('is-spinning');
+    this.rouletteSkipRequested = false;
 
     if (candidatePlayers.length > 1) {
+      this.roulettePhase = 'spin';
       await this.runSpin({ candidatePlayers, durationSec, nameEl, fighterEl });
     }
+    // スキップはルーレット回転のみ対象。デコード（名前が順に表示される演出）は必ず再生する
+    this.rouletteSkipRequested = false;
+    this.roulettePhase = 'decode';
     await this.runDecode({ winner, nameEl, fighterEl, stageEl });
+    this.roulettePhase = null;
     await this.runImpact({ stageEl });
+  }
+
+  /**
+   * ルーレット/デコードをスキップして即確定演出へ（時短）
+   * @returns {boolean} スキップを受け付けたか
+   */
+  skipRoulette() {
+    if (this.roulettePhase !== 'spin') return false;
+    this.rouletteSkipRequested = true;
+    return true;
   }
 
   /**
@@ -73,6 +91,7 @@ export class AnimationManager {
       let count = 0;
 
       const frame = (now) => {
+        if (this.rouletteSkipRequested) { resolve(); return; }
         const progress = Math.min((now - start) / total, 1);
         const interval = 40 + easeOutQuint(progress) * 380;
 
@@ -246,68 +265,41 @@ export class AnimationManager {
   }
 
   /**
-   * フィナーレ：六角形の破片が舞う
+   * フィナーレ：スマブラ風「READY to FIGHT!!」バナー演出
    */
   startFinale() {
-    if (!this.canvas) return;
+    this.stopFinale();
     this.finaleRunning = true;
-    const colors = ['#00e5ff', '#3dffa8', '#ffffff', '#7dffe1', '#ffc23d'];
-    this.particles = Array.from({ length: 160 }, () => ({
-      x: Math.random() * this.canvas.width,
-      y: -20 - Math.random() * this.canvas.height * 0.6,
-      r: 4 + Math.random() * 9,
-      color: colors[Math.floor(Math.random() * colors.length)],
-      vx: (Math.random() - 0.5) * 1.6,
-      vy: 1.5 + Math.random() * 3.5,
-      rot: Math.random() * Math.PI,
-      vr: (Math.random() - 0.5) * 0.08,
-      filled: Math.random() < 0.45,
-    }));
-
     sound.playFanfare();
 
-    const drawHex = (p) => {
-      const c = this.ctx;
-      c.save();
-      c.translate(p.x, p.y);
-      c.rotate(p.rot);
-      c.beginPath();
-      for (let i = 0; i < 6; i++) {
-        const a = (Math.PI / 3) * i;
-        const px = Math.cos(a) * p.r;
-        const py = Math.sin(a) * p.r;
-        if (i === 0) c.moveTo(px, py); else c.lineTo(px, py);
-      }
-      c.closePath();
-      c.shadowColor = p.color;
-      c.shadowBlur = 8;
-      if (p.filled) { c.fillStyle = p.color; c.globalAlpha = 0.75; c.fill(); }
-      else { c.strokeStyle = p.color; c.lineWidth = 1.6; c.stroke(); }
-      c.restore();
-    };
+    const el = document.createElement('div');
+    el.className = 'ready-fight';
+    el.setAttribute('aria-hidden', 'true');
+    el.innerHTML = `
+      <div class="rf-flash"></div>
+      <div class="rf-band"></div>
+      <div class="rf-text">
+        <span class="rf-ready">READY</span>
+        <span class="rf-to">to</span>
+        <span class="rf-fight">FIGHT!!</span>
+      </div>`;
+    document.body.appendChild(el);
+    this.finaleEl = el;
 
-    const render = () => {
-      if (!this.finaleRunning) return;
-      this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-      for (const p of this.particles) {
-        p.x += p.vx;
-        p.y += p.vy;
-        p.rot += p.vr;
-        if (p.y > this.canvas.height + 20) {
-          p.y = -20;
-          p.x = Math.random() * this.canvas.width;
-        }
-        drawHex(p);
-      }
-      this.rafId = requestAnimationFrame(render);
-    };
-
-    if (this.rafId) cancelAnimationFrame(this.rafId);
-    this.rafId = requestAnimationFrame(render);
+    this.finaleTimer = setTimeout(() => {
+      el.classList.add('is-leaving');
+      this.finaleTimer = setTimeout(() => this.stopFinale(), 600);
+    }, 3000);
   }
 
   stopFinale() {
     this.finaleRunning = false;
+    clearTimeout(this.finaleTimer);
+    this.finaleTimer = null;
+    if (this.finaleEl) {
+      this.finaleEl.remove();
+      this.finaleEl = null;
+    }
     if (this.rafId) cancelAnimationFrame(this.rafId);
     if (this.ctx && this.canvas) this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
   }

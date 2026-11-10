@@ -195,7 +195,10 @@ async function handleDrawNext() {
   }
 
   const state = store.getState();
-  if (state.isSpinning) return;
+  if (state.isSpinning) {
+    animation.skipRoulette();
+    return;
+  }
 
   const result = selectNextWinner();
   if (!result || !result.winner) {
@@ -471,6 +474,8 @@ function initApp() {
 
   // 操作バー
   dom.btnDrawNext.addEventListener('click', () => { sound.init(); handleDrawNext(); });
+  // 抽選中にステージをクリックするとスキップ（時短）
+  dom.stageCard.addEventListener('click', () => animation.skipRoulette());
   dom.btnUndo.addEventListener('click', handleUndo);
   dom.btnToggleBg.addEventListener('click', handleToggleBg);
   dom.btnOpenParticipants.addEventListener('click', openParticipantsModal);

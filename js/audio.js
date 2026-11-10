@@ -446,9 +446,191 @@ class CrispCyberSoundSynthesizer {
   }
 
   /**
-   * 7. 全ドラフト完了フィナーレ音 — 巨大構造物が起動するような荘厳なドローン
+   * 7. READY to FIGHT 効果音 — スマブラ風
+   * 風切りのライザー → 斬撃（シュパッ）→ オーケストラヒット風の重い一撃（ドンッ＋ブラス和音）＋金属の短い輝き
+   * ※ 実際のゲーム音源ではなく、雰囲気を寄せた合成音
    */
   buildFanfareBuffer(sr) {
+    const duration = 2.2;
+    const len = Math.floor(sr * duration);
+    const buf = this.ctx.createBuffer(2, len, sr);
+    const L = buf.getChannelData(0);
+    const R = buf.getChannelData(1);
+    const hit = 0.5; // 衝撃のタイミング（FIGHT!! の着地に合わせる）
+
+    // 風切り＋斬撃ノイズ：ライザー(0〜hit) → 斬撃の高域バースト → 短い余波
+    const air = new Float32Array(len);
+    for (let i = 0; i < len; i++) {
+      const t = i / sr;
+      let env;
+      if (t < hit) env = Math.pow(t / hit, 2.2) * 0.9;
+      else env = Math.exp(-(t - hit) / 0.16) * 1.0;
+      air[i] = (Math.random() * 2 - 1) * env;
+    }
+    // 帯域：ライザーは中域、斬撃は高域。ローパスで中低域を引いて高域だけ残す
+    const mid = Float32Array.from(air);
+    this.lowpass(mid, 1800, sr);
+    const hi = Float32Array.from(air);
+    this.lowpass(hi, 4200, sr);
+    for (let i = 0; i < len; i++) hi[i] = air[i] - hi[i];
+
+    // ブラス風の和音（D5 パワーコード：D4/A4/D5/F#5）— ノコギリ波を倍音加算で近似
+    const brass = [293.66, 440.0, 587.33, 739.99];
+    const saw = (f, t) => {
+      let s = 0;
+      for (let h = 1; h <= 6; h++) s += Math.sin(2 * Math.PI * f * h * t) / h;
+      return s * 0.5;
+    };
+
+    // 金属の輝き（短く減衰）
+    const shine = [
+      { f: 3150, decay: 0.14, amp: 0.25 },
+      { f: 4820, decay: 0.10, amp: 0.16 },
+    ];
+
+    for (let i = 0; i < len; i++) {
+      const t = i / sr;
+      let v = mid[i] * 0.35 + hi[i] * (t < hit ? 0.5 : 0.8);
+
+      if (t >= hit) {
+        const dt = t - hit;
+        const atk = Math.min(1, dt / 0.004);
+
+        // ドン：低域の一撃（ピッチ下降）
+        const boom = Math.sin(2 * Math.PI * (120 - 260 * Math.min(dt, 0.12)) * dt) * Math.exp(-dt / 0.28) * 0.9;
+
+        // オーケストラヒット：ブラス和音の短いスタブ
+        const stabEnv = Math.exp(-dt / 0.38) * atk;
+        let stab = 0;
+        for (const f of brass) stab += saw(f, dt);
+        stab *= stabEnv * 0.2;
+
+        // 金属の輝き
+        let ring = 0;
+        for (const m of shine) ring += Math.sin(2 * Math.PI * m.f * dt) * Math.exp(-dt / m.decay) * m.amp;
+
+        v += boom + stab + ring;
+      }
+      L[i] = v;
+      R[i] = v;
+    }
+    // 少しだけ空間の広がり
+    this.reverb(L, R, sr, { mix: 0.22, decay: 0.72, damp: 4500 });
+    this.finalize(L, R, sr, 1.2, 0.85);
+    return buf;
+  }
+
+  /**
+   * （旧）READY to FIGHT 効果音 — 抜刀音（バットウ音）。現在は未使用
+   * 鞘走り（金属が擦れる「シャリリ…」）→ 刀身が抜け切る短い「チャキッ」。
+   * 余韻は伸ばさず、すぐに切れる。
+   */
+  buildFanfareBufferDraw(sr) {
+    const duration = 1.3;
+    const len = Math.floor(sr * duration);
+    const buf = this.ctx.createBuffer(2, len, sr);
+    const L = buf.getChannelData(0);
+    const R = buf.getChannelData(1);
+    const hit = 0.55; // 抜け切るタイミング（FIGHT!! の着地に合わせる）
+    const scrapeStart = 0.12;
+
+    // 鞘走り：ノイズを帯域制限し、細かな振動（ガリガリ感）で変調
+    const scrape = new Float32Array(len);
+    for (let i = 0; i < len; i++) {
+      const t = i / sr;
+      if (t < scrapeStart || t > hit + 0.02) continue;
+      const p = (t - scrapeStart) / (hit - scrapeStart);
+      // 速度が上がるように音量・明るさが増し、抜け切る直前でピーク
+      const env = Math.pow(Math.min(1, p), 1.3) * (t > hit ? Math.max(0, 1 - (t - hit) / 0.02) : 1);
+      const rattle = 0.6 + 0.4 * Math.sin(2 * Math.PI * (70 + 90 * p) * t);
+      scrape[i] = (Math.random() * 2 - 1) * env * rattle;
+    }
+    const lowA = Float32Array.from(scrape);
+    this.lowpass(lowA, 2200, sr);
+    for (let i = 0; i < len; i++) scrape[i] -= lowA[i]; // 2.2kHz以上のみ
+    this.lowpass(scrape, 9000, sr);
+
+    // 刀身の共鳴（短く減衰）。キーンと伸びないよう decay を極短にする
+    const modes = [
+      { f: 2350, decay: 0.09, amp: 0.45 },
+      { f: 3720, decay: 0.07, amp: 0.30 },
+      { f: 5410, decay: 0.05, amp: 0.18 },
+    ];
+
+    for (let i = 0; i < len; i++) {
+      const t = i / sr;
+      let ring = 0;
+      let click = 0;
+      let thunk = 0;
+      if (t >= hit) {
+        const dt = t - hit;
+        const atk = Math.min(1, dt / 0.0006);
+        modes.forEach((m) => {
+          ring += Math.sin(2 * Math.PI * m.f * dt) * Math.exp(-dt / m.decay) * m.amp * atk;
+        });
+        // 「チャキッ」の打撃クリック
+        click = (Math.random() * 2 - 1) * Math.exp(-dt / 0.012) * 0.7;
+        // 納刀的な軽い芯（金属の当たり）
+        thunk = Math.sin(2 * Math.PI * (520 - 600 * Math.min(dt, 0.05)) * dt) * Math.exp(-dt / 0.045) * 0.35;
+      }
+      const v = scrape[i] * 0.9 + ring * 0.55 + click * 0.4 + thunk;
+      L[i] = v;
+      R[i] = v * 0.95 + scrape[i] * 0.05;
+    }
+    this.reverb(L, R, sr, { mix: 0.1, decay: 0.55, damp: 5000 });
+    this.finalize(L, R, sr, 1.15, 0.85);
+    return buf;
+  }
+
+
+  /**
+   * （旧）全ドラフト完了フィナーレ音 — 柔らかい長調のベル・アルペジオ。現在は未使用
+   */
+  buildFanfareBufferChord(sr) {
+    const duration = 4.0;
+    const len = Math.floor(sr * duration);
+    const buf = this.ctx.createBuffer(2, len, sr);
+    const L = buf.getChannelData(0);
+    const R = buf.getChannelData(1);
+
+    // C4 E4 G4 C5 E5 G5 → 最後に C5/E5/G5 の和音で明るく着地
+    const seq = [
+      { f: 261.63, t: 0.00, pan: -0.4 },
+      { f: 329.63, t: 0.14, pan: 0.4 },
+      { f: 392.0, t: 0.28, pan: -0.3 },
+      { f: 523.25, t: 0.42, pan: 0.3 },
+      { f: 659.25, t: 0.60, pan: -0.2 },
+      { f: 783.99, t: 0.78, pan: 0.2 },
+      { f: 523.25, t: 1.05, pan: -0.3 },
+      { f: 659.25, t: 1.05, pan: 0.0 },
+      { f: 783.99, t: 1.05, pan: 0.3 },
+    ];
+
+    for (let i = 0; i < len; i++) {
+      const t = i / sr;
+      let vL = 0;
+      let vR = 0;
+      for (const n of seq) {
+        const dt = t - n.t;
+        if (dt < 0) continue;
+        const env = Math.exp(-dt / 0.7) * Math.min(1, dt / 0.008);
+        const v = (Math.sin(2 * Math.PI * n.f * dt)
+          + 0.18 * Math.sin(2 * Math.PI * n.f * 2 * dt) * Math.exp(-dt * 5)) * env * 0.2;
+        vL += v * (1 - n.pan);
+        vR += v * (1 + n.pan);
+      }
+      L[i] = vL;
+      R[i] = vR;
+    }
+    this.reverb(L, R, sr, { mix: 0.3, decay: 0.75, damp: 3500 });
+    this.finalize(L, R, sr, 1.0, 0.8);
+    return buf;
+  }
+
+  /**
+   * （旧）全ドラフト完了フィナーレ音 — 巨大構造物が起動するような荘厳なドローン。現在は未使用
+   */
+  buildFanfareBufferDark(sr) {
     const duration = 5.0;
     const len = Math.floor(sr * duration);
     const buf = this.ctx.createBuffer(2, len, sr);
