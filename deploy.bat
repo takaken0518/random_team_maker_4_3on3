@@ -6,7 +6,7 @@ echo ====================================================
 echo.
 
 echo [1/2] S3バケットへ最新ファイルを同期中...
-aws s3 sync . s3://smash-3on3-team-draft-069089525875/ --exclude "*" --include "index.html" --include "index.css" --include "sample_participants.csv" --include "js/*"
+aws s3 sync . s3://smash-3on3-team-draft-069089525875/ --exclude "*" --include "index.html" --include "index.css" --include "sample_participants.csv" --include "js/*" --include "audio/*"
 if %ERRORLEVEL% neq 0 (
     echo [エラー] S3へのアップロードに失敗しました。
     pause
