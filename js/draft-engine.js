@@ -161,3 +161,27 @@ export function undoStep() {
   if (state.isSpinning) return false;
   return store.popHistory();
 }
+
+/**
+ * チーム名を後から変更（空文字の場合はデフォルトの TEAM A 等に戻す）
+ * @param {number} teamIndex
+ * @param {string} newName
+ */
+export function renameTeam(teamIndex, newName) {
+  const state = store.getState();
+  if (!state.teams || !state.teams[teamIndex]) return null;
+  const trimmed = String(newName ?? '').trim();
+  const finalName = trimmed || getTeamName(teamIndex);
+
+  const teams = state.teams.map((t, i) => (i === teamIndex ? { ...t, name: finalName } : t));
+  const draftQueue = (state.draftQueue || []).map(step => (
+    step.teamIndex === teamIndex ? { ...step, teamName: finalName } : step
+  ));
+  const history = (state.history || []).map(snap => ({
+    ...snap,
+    teams: (snap.teams || []).map((t, i) => (i === teamIndex ? { ...t, name: finalName } : t)),
+  }));
+
+  store.setState({ teams, draftQueue, history });
+  return finalName;
+}

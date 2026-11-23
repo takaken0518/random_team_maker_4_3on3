@@ -7,7 +7,7 @@ import {
   createPlayer, readCsvFile, validateTeamConfig, recommendedTeamCount, SAMPLE_PLAYERS,
 } from './participants.js';
 import {
-  initializeDraft, getCurrentStep, selectNextWinner, commitWinner, undoStep, TEAM_COLORS,
+  initializeDraft, getCurrentStep, selectNextWinner, commitWinner, undoStep, renameTeam, TEAM_COLORS,
 } from './draft-engine.js';
 import { animation } from './animation.js';
 import { sound } from './audio.js';
@@ -32,6 +32,8 @@ const dom = {
   btnDrawNext: $('btn-draw-next'),
   btnUndo: $('btn-undo'),
   btnOpenParticipants: $('btn-open-participants'),
+  btnToggleFighter: $('btn-toggle-fighter'),
+  fighterModeLabel: $('fighter-mode-label'),
   btnToggleBg: $('btn-toggle-bg'),
   bgModeLabel: $('bg-mode-label'),
   btnReset: $('btn-reset'),
@@ -54,6 +56,7 @@ const dom = {
   btnTeamAuto: $('btn-team-auto'),
   teamValidation: $('team-validation'),
   teamPreview: $('team-preview'),
+  checkboxShowFighter: $('checkbox-show-fighter'),
   checkboxSound: $('checkbox-sound'),
   applyWarning: $('apply-warning'),
   btnSaveStartDraft: $('btn-save-start-draft'),
@@ -75,6 +78,8 @@ let lastConfirmed = null;
 let editingPlayers = [];
 let editingId = null;
 let teamCountTouched = false;
+// ダイアログを開く前のフォーカス要素（E2-05: 閉じた後に元の操作位置へ戻す）
+let lastFocusedBeforeModal = null;
 
 function escapeHtml(str) {
   return String(str ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -88,13 +93,49 @@ function showToast(message, duration = 2600) {
   toastTimer = setTimeout(() => dom.toast.classList.remove('is-show'), duration);
 }
 
+function getActiveModal() {
+  if (dom.modalParticipants.classList.contains('is-active')) return dom.modalParticipants;
+  if (dom.modalReset.classList.contains('is-active')) return dom.modalReset;
+  return null;
+}
+
 function isModalOpen() {
-  return dom.modalParticipants.classList.contains('is-active') || dom.modalReset.classList.contains('is-active');
+  return getActiveModal() !== null;
+}
+
+/**
+ * モーダル内のフォーカストラップ（E2-02）
+ */
+function trapModalFocus(e) {
+  if (e.key !== 'Tab') return;
+  const modal = getActiveModal();
+  if (!modal) return;
+  const focusables = Array.from(
+    modal.querySelectorAll('button:not(:disabled):not(.is-hidden), input:not(:disabled):not([hidden]), [tabindex]:not([tabindex="-1"])')
+  ).filter(el => el.offsetParent !== null);
+  if (focusables.length === 0) return;
+
+  const first = focusables[0];
+  const last = focusables[focusables.length - 1];
+  if (e.shiftKey && document.activeElement === first) {
+    e.preventDefault();
+    last.focus();
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault();
+    first.focus();
+  }
 }
 
 /* ==========================================================================
    描画
    ========================================================================== */
+
+function setStageSystemLabel(label, subLabel = '') {
+  dom.stagePlayerName.textContent = label;
+  dom.stagePlayerName.classList.add('is-system-label');
+  dom.stageFighterName.textContent = subLabel;
+  dom.stageFighterName.classList.toggle('is-system-sublabel', Boolean(subLabel));
+}
 
 function renderUI(state) {
   const total = state.draftQueue.length;
@@ -114,27 +155,31 @@ function renderUI(state) {
   if (total === 0) {
     setStageTarget(null);
     dom.stageStatus.textContent = 'NO DATA';
-    dom.stagePlayerName.textContent = 'NO DATA';
-    dom.stageFighterName.textContent = '参加者を登録してください';
+    setStageSystemLabel('NO DATA', '参加者を登録してください');
   } else if (!step) {
     setStageTarget(null);
     dom.stageStatus.textContent = 'COMPLETE';
     if (!state.isSpinning) {
-      dom.stagePlayerName.textContent = 'ALL UNITS READY';
-      dom.stageFighterName.textContent = '全チーム確定';
+      setStageSystemLabel('ALL UNITS READY', '全チーム確定');
     }
   } else {
     setStageTarget(step, state.teams[step.teamIndex]);
     dom.stageStatus.textContent = state.isSpinning ? 'SCANNING' : 'STANDBY';
     if (!state.isSpinning && done === 0) {
-      dom.stagePlayerName.textContent = 'READY';
-      dom.stageFighterName.textContent = 'Space で抽選開始';
+      setStageSystemLabel('READY', 'Space で抽選開始');
     }
   }
 
-  document.body.className = `bg-${state.settings.bgMode}`;
+  const showFighter = state.settings.showFighter !== false;
+  document.body.className = `bg-${state.settings.bgMode}${showFighter ? '' : ' hide-fighter'}`;
   const bgNames = { dark: 'ダーク', transparent: 'OBS透過', stage: 'ステージ' };
   dom.bgModeLabel.textContent = bgNames[state.settings.bgMode] || state.settings.bgMode;
+  if (dom.fighterModeLabel) {
+    dom.fighterModeLabel.textContent = showFighter ? '表示' : '非表示';
+  }
+  if (dom.btnToggleFighter) {
+    dom.btnToggleFighter.setAttribute('aria-pressed', String(showFighter));
+  }
 
   renderTeamsGrid(state, step);
 }
@@ -153,11 +198,27 @@ function setStageTarget(step, team) {
   dom.stageCard.style.setProperty('--team-color', team.color);
 }
 
+function buildTeamObsUrl(team) {
+  const minimal = {
+    name: team.name,
+    letter: team.letter,
+    color: team.color,
+    slots: team.slots.map(s => ({
+      label: s.label,
+      player: s.player ? { name: s.player.name, fighter: s.player.fighter || '' } : null,
+    })),
+  };
+  const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(minimal))));
+  return `team.html?team=${encodeURIComponent(team.letter)}&data=${encodeURIComponent(encoded)}`;
+}
+
 function renderTeamsGrid(state, step) {
   const html = state.teams.map((team, t) => {
     const isTarget = step && step.teamIndex === t;
     const filled = team.slots.filter(s => s.player).length;
     const isComplete = filled === team.slots.length;
+    const statusText = isComplete ? 'FORMED' : isTarget ? `TARGET · ${filled}/${team.slots.length}` : `${filled}/${team.slots.length}`;
+    const obsHref = `team.html?team=${encodeURIComponent(team.letter)}`;
 
     const slots = team.slots.map((slot, s) => {
       const isActive = isTarget && step.slotIndex === s && !slot.player;
@@ -165,18 +226,26 @@ function renderTeamsGrid(state, step) {
       const cls = ['slot-item', slot.player ? 'is-filled' : '', isActive ? 'is-active-drawing' : '', justIn ? 'is-just-confirmed' : '']
         .filter(Boolean).join(' ');
       const body = slot.player
-        ? `<span class="slot-player-name">${escapeHtml(slot.player.name)}</span>
-           ${slot.player.fighter ? `<span class="slot-fighter-name">${escapeHtml(slot.player.fighter)}</span>` : ''}`
-        : `<span class="slot-waiting-text">${isActive ? '▶ SCANNING...' : 'VACANT'}</span>`;
+        ? `<span class="slot-player-name" title="${escapeHtml(slot.player.name)}">${escapeHtml(slot.player.name)}</span>
+           ${slot.player.fighter ? `<span class="slot-fighter-name" title="${escapeHtml(slot.player.fighter)}">${escapeHtml(slot.player.fighter)}</span>` : '<span></span>'}`
+        : `<span class="slot-waiting-text">${isActive ? '▶ NEXT DRAW' : 'VACANT'}</span>`;
       return `<li class="${cls}"><span class="slot-label">${slot.label}</span>${body}</li>`;
     }).join('');
 
     return `
-      <article class="team-card panel ${isTarget ? 'is-current-target' : ''} ${isComplete ? 'is-complete' : ''}" style="--team-color:${team.color}">
+      <article class="team-card panel ${isTarget ? 'is-current-target' : ''} ${isComplete ? 'is-complete' : ''}"
+        style="--team-color:${team.color}"
+        data-team-index="${t}"
+        ${isComplete ? `tabindex="0" role="button" aria-label="${escapeHtml(team.name)}の拡大カードを表示"` : ''}>
         <div class="team-header">
           <div class="team-emblem-mini">${escapeHtml(team.letter)}</div>
-          <div class="team-title">${escapeHtml(team.name)}</div>
-          <div class="team-status-tag">${isComplete ? 'FORMED' : `${filled}/${team.slots.length}`}</div>
+          <div class="team-title-wrap">
+            <div class="team-title" title="${escapeHtml(team.name)}">${escapeHtml(team.name)}</div>
+            <button type="button" class="team-rename-btn" data-rename-team="${t}" title="チーム名を変更" aria-label="${escapeHtml(team.name)}のチーム名を変更">✎</button>
+          </div>
+          <div class="team-status-tag">${statusText}</div>
+          ${isComplete ? '<span class="team-zoom-hint" aria-hidden="true">⤢ 拡大</span>' : ''}
+          <a href="${obsHref}" target="_blank" rel="noopener" class="team-obs-link" title="${escapeHtml(team.name)}のOBS用単体カードページを開く" aria-label="${escapeHtml(team.name)}のOBS用単体カードページを開く">OBS</a>
         </div>
         <ul class="slot-list">${slots}</ul>
       </article>`;
@@ -208,6 +277,8 @@ async function handleDrawNext() {
 
   activeStep = result.step;
   lastConfirmed = null;
+  dom.stagePlayerName.classList.remove('is-system-label');
+  dom.stageFighterName.classList.remove('is-system-sublabel');
   store.setState({ isSpinning: true });
 
   const candidates = state.players.filter(p => state.undrawnPlayerIds.includes(p.id));
@@ -225,8 +296,16 @@ async function handleDrawNext() {
 
   if (commit && commit.teamCompleted) {
     await new Promise(r => setTimeout(r, 450));
-    const team = store.getState().teams[commit.step.teamIndex];
-    await animation.showFormation(team, dom.formationOverlay);
+    const teamIdx = commit.step.teamIndex;
+    const team = store.getState().teams[teamIdx];
+    await animation.showFormation(team, dom.formationOverlay, {
+      obsUrl: buildTeamObsUrl(team),
+      onRename: (newName) => {
+        const updated = renameTeam(teamIdx, newName);
+        if (updated) showToast(`チーム名を「${updated}」に変更しました`);
+        return updated;
+      },
+    });
   }
 
   activeStep = null;
@@ -245,8 +324,7 @@ function handleUndo() {
   lastConfirmed = null;
   if (undoStep()) {
     dom.stageCard.classList.remove('is-locked', 'impact');
-    dom.stagePlayerName.textContent = 'UNDO';
-    dom.stageFighterName.textContent = '直前の抽選を取り消しました';
+    setStageSystemLabel('UNDO', '直前の抽選を取り消しました');
     showToast('直前の抽選を取り消しました');
   }
 }
@@ -258,11 +336,18 @@ function handleToggleBg() {
   store.setState({ settings: { ...state.settings, bgMode: next } });
 }
 
+function handleToggleFighter() {
+  const state = store.getState();
+  const next = state.settings.showFighter === false;
+  store.setState({ settings: { ...state.settings, showFighter: next } });
+}
+
 /* ==========================================================================
    参加者・チーム設定モーダル
    ========================================================================== */
 
 function openParticipantsModal() {
+  lastFocusedBeforeModal = document.activeElement;
   const state = store.getState();
   editingPlayers = state.players.map(p => ({ ...p }));
   editingId = null;
@@ -274,6 +359,7 @@ function openParticipantsModal() {
   if (orderRadio) orderRadio.checked = true;
   const speedRadio = document.querySelector(`input[name="spin-speed"][value="${state.settings.spinDurationSec}"]`);
   if (speedRadio) speedRadio.checked = true;
+  if (dom.checkboxShowFighter) dom.checkboxShowFighter.checked = state.settings.showFighter !== false;
   dom.checkboxSound.checked = state.settings.seEnabled;
 
   dom.applyWarning.textContent = state.currentStepIndex > 0
@@ -283,11 +369,16 @@ function openParticipantsModal() {
   resetPlayerForm();
   renderPlayerList();
   dom.modalParticipants.classList.add('is-active');
+  dom.modalParticipants.setAttribute('aria-hidden', 'false');
   setTimeout(() => dom.inputName.focus(), 50);
 }
 
 function closeParticipantsModal() {
   dom.modalParticipants.classList.remove('is-active');
+  dom.modalParticipants.setAttribute('aria-hidden', 'true');
+  if (lastFocusedBeforeModal && typeof lastFocusedBeforeModal.focus === 'function') {
+    lastFocusedBeforeModal.focus();
+  }
 }
 
 function resetPlayerForm() {
@@ -308,8 +399,8 @@ function renderPlayerList() {
         <span class="pr-name" title="${escapeHtml(p.name)}">${escapeHtml(p.name)}</span>
         <span class="pr-fighter" title="${escapeHtml(p.fighter)}">${escapeHtml(p.fighter) || '—'}</span>
         <span class="pr-actions">
-          <button type="button" class="btn btn-secondary btn-icon" data-action="edit">編集</button>
-          <button type="button" class="btn btn-danger btn-icon" data-action="delete">削除</button>
+          <button type="button" class="btn btn-secondary btn-icon" data-action="edit" aria-label="${escapeHtml(p.name)}を編集">編集</button>
+          <button type="button" class="btn btn-danger btn-icon" data-action="delete" aria-label="${escapeHtml(p.name)}を削除">削除</button>
         </span>
       </li>`).join('');
   }
@@ -354,6 +445,7 @@ function handlePlayerSubmit(e) {
     return;
   }
 
+  const wasEditing = Boolean(editingId);
   if (editingId) {
     const target = editingPlayers.find(p => p.id === editingId);
     if (target) {
@@ -365,7 +457,9 @@ function handlePlayerSubmit(e) {
   }
   resetPlayerForm();
   renderPlayerList();
-  dom.playerList.scrollTop = editingId ? dom.playerList.scrollTop : dom.playerList.scrollHeight;
+  if (!wasEditing) {
+    dom.playerList.scrollTop = dom.playerList.scrollHeight;
+  }
   dom.inputName.focus();
 }
 
@@ -439,7 +533,12 @@ function handleApply() {
   lastConfirmed = null;
   const state = store.getState();
   store.setState({
-    settings: { ...state.settings, spinDurationSec: speed, seEnabled: dom.checkboxSound.checked },
+    settings: {
+      ...state.settings,
+      spinDurationSec: speed,
+      showFighter: dom.checkboxShowFighter ? dom.checkboxShowFighter.checked : true,
+      seEnabled: dom.checkboxSound.checked,
+    },
   });
 
   if (initializeDraft(editingPlayers, teamCount, order)) {
@@ -477,8 +576,109 @@ function initApp() {
   // 抽選中にステージをクリックするとスキップ（時短）
   dom.stageCard.addEventListener('click', () => animation.skipRoulette());
   dom.btnUndo.addEventListener('click', handleUndo);
+  if (dom.btnToggleFighter) dom.btnToggleFighter.addEventListener('click', handleToggleFighter);
   dom.btnToggleBg.addEventListener('click', handleToggleBg);
   dom.btnOpenParticipants.addEventListener('click', openParticipantsModal);
+
+  // チームカード上でのインラインチーム名編集
+  const startCardTeamRename = (teamIdx, cardEl) => {
+    const state = store.getState();
+    const team = state.teams[teamIdx];
+    if (!team || !cardEl) return;
+    const titleWrap = cardEl.querySelector('.team-title-wrap');
+    if (!titleWrap || titleWrap.querySelector('.team-rename-input')) return;
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'team-rename-input';
+    input.value = team.name;
+    input.maxLength = 32;
+    input.setAttribute('aria-label', '新しいチーム名');
+
+    titleWrap.innerHTML = '';
+    titleWrap.appendChild(input);
+    input.focus();
+    input.select();
+
+    let done = false;
+    const finish = (save) => {
+      if (done) return;
+      done = true;
+      if (save) {
+        const nextName = input.value.trim();
+        if (nextName && nextName !== team.name) {
+          const updated = renameTeam(teamIdx, nextName);
+          if (updated) showToast(`チーム名を「${updated}」に変更しました`);
+          return;
+        } else if (!nextName) {
+          const updated = renameTeam(teamIdx, '');
+          if (updated && updated !== team.name) showToast(`チーム名を「${updated}」に戻しました`);
+          return;
+        }
+      }
+      renderUI(store.getState());
+    };
+
+    input.addEventListener('click', (e) => e.stopPropagation());
+    input.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        finish(true);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        finish(false);
+      }
+    });
+    input.addEventListener('blur', () => finish(true));
+  };
+
+  // 確定済みチームカードのクリック・Enterで拡大表示
+  const openCompletedTeamCard = (cardEl) => {
+    if (!cardEl) return;
+    const state = store.getState();
+    if (state.isSpinning) return;
+    const idx = parseInt(cardEl.dataset.teamIndex, 10);
+    const team = state.teams[idx];
+    if (!team || !team.slots.every(s => s.player)) return;
+    sound.init();
+    animation.showFormation(team, dom.formationOverlay, {
+      buttonLabel: '閉じる',
+      obsUrl: buildTeamObsUrl(team),
+      onRename: (newName) => {
+        const updated = renameTeam(idx, newName);
+        if (updated) {
+          showToast(`チーム名を「${updated}」に変更しました`);
+          const link = dom.formationOverlay.querySelector('#formation-obs-link');
+          const updatedTeam = store.getState().teams[idx];
+          if (link && updatedTeam) link.href = buildTeamObsUrl(updatedTeam);
+        }
+        return updated;
+      },
+    });
+  };
+  dom.teamsGrid.addEventListener('click', (e) => {
+    if (e.target.closest('.team-obs-link') || e.target.closest('.team-rename-input')) return;
+    const renameBtn = e.target.closest('.team-rename-btn');
+    if (renameBtn) {
+      e.stopPropagation();
+      const idx = parseInt(renameBtn.dataset.renameTeam, 10);
+      startCardTeamRename(idx, renameBtn.closest('.team-card'));
+      return;
+    }
+    const card = e.target.closest('.team-card.is-complete');
+    if (card) openCompletedTeamCard(card);
+  });
+  dom.teamsGrid.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.code === 'Space') {
+      const card = e.target.closest('.team-card.is-complete');
+      if (card) {
+        e.preventDefault();
+        e.stopPropagation();
+        openCompletedTeamCard(card);
+      }
+    }
+  });
 
   // 参加者モーダル
   dom.btnCloseParticipants.addEventListener('click', closeParticipantsModal);
@@ -508,11 +708,21 @@ function initApp() {
   dom.btnSaveStartDraft.addEventListener('click', handleApply);
 
   // リセット
-  const closeReset = () => dom.modalReset.classList.remove('is-active');
-  dom.btnReset.addEventListener('click', () => {
+  const openReset = () => {
     if (store.getState().isSpinning) return;
+    lastFocusedBeforeModal = document.activeElement;
     dom.modalReset.classList.add('is-active');
-  });
+    dom.modalReset.setAttribute('aria-hidden', 'false');
+    setTimeout(() => dom.btnCancelReset.focus(), 50);
+  };
+  const closeReset = () => {
+    dom.modalReset.classList.remove('is-active');
+    dom.modalReset.setAttribute('aria-hidden', 'true');
+    if (lastFocusedBeforeModal && typeof lastFocusedBeforeModal.focus === 'function') {
+      lastFocusedBeforeModal.focus();
+    }
+  };
+  dom.btnReset.addEventListener('click', openReset);
   dom.btnCancelReset.addEventListener('click', closeReset);
   dom.btnCloseReset.addEventListener('click', closeReset);
   dom.btnConfirmReset.addEventListener('click', () => {
@@ -521,7 +731,7 @@ function initApp() {
     const state = store.getState();
     initializeDraft(state.players, state.teams.length, state.draftOrderMode);
     dom.stageCard.classList.remove('is-locked', 'impact');
-    dom.stagePlayerName.textContent = 'READY';
+    setStageSystemLabel('READY', 'Space で抽選開始');
     closeReset();
     showToast('抽選結果をリセットしました');
   });
@@ -530,9 +740,11 @@ function initApp() {
   window.addEventListener('keydown', (e) => {
     if (isModalOpen()) {
       if (e.key === 'Escape') {
-        closeParticipantsModal();
-        closeReset();
+        if (dom.modalParticipants.classList.contains('is-active')) closeParticipantsModal();
+        if (dom.modalReset.classList.contains('is-active')) closeReset();
+        return;
       }
+      trapModalFocus(e);
       return;
     }
     // 部隊結成演出中なら Space / Enter / Escape で閉じる
@@ -544,6 +756,10 @@ function initApp() {
     }
 
     if (e.code === 'Space' || e.code === 'Enter') {
+      // ボタン等にフォーカスがある状態でEnter/Spaceを押した時の二重発火を防止
+      if (document.activeElement && document.activeElement !== document.body && document.activeElement !== dom.btnDrawNext) {
+        if (e.code === 'Enter') return;
+      }
       e.preventDefault();
       sound.init();
       handleDrawNext();

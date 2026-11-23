@@ -4,10 +4,11 @@
   "description": "スマブラ3on3 チームドラフト・ルーレット配信ツール",
   "type": "module",
   "scripts": {
-    "start": "npx serve -l 3000 .",
+    "dev": "node server.js",
+    "start": "node server.js",
     "sfx:list": "node scripts/generate-sfx.mjs --list",
     "sfx:generate": "node scripts/generate-sfx.mjs",
-    "deploy": "aws s3 sync . s3://smash-3on3-team-draft-069089525875/ --exclude \"*\" --include \"index.html\" --include \"index.css\" --include \"sample_participants.csv\" --include \"js/*\" --include \"audio/*\" && aws cloudfront create-invalidation --distribution-id E3V9FHQ10CNA0 --paths \"/*\""
+    "deploy": "aws s3 sync . s3://smash-3on3-team-draft-069089525875/ --exclude \"*\" --include \"index.html\" --include \"team.html\" --include \"index.css\" --include \"sample_participants.csv\" --include \"js/*\" --include \"audio/*\" && aws cloudfront create-invalidation --distribution-id E3V9FHQ10CNA0 --paths \"/*\""
   },
   "keywords": [
     "smash",

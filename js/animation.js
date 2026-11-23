@@ -190,15 +190,30 @@ export class AnimationManager {
 
   /**
    * 部隊結成カード演出 (ユーザーの操作があるまで表示を維持)
+   * @param {Object} team
+   * @param {HTMLElement} overlayEl
+   * @param {{ buttonLabel?: string, playSound?: boolean, obsUrl?: string, onRename?: (newName: string) => string|null }} [options]
    * @returns {Promise<void>} ユーザーのクリックまたはSpaceキーで解決
    */
-  showFormation(team, overlayEl) {
+  showFormation(team, overlayEl, { buttonLabel = '次へ進む', playSound = true, obsUrl = '', onRename = null } = {}) {
     const members = team.slots.map((s, i) => `
       <li class="formation-member" style="--i:${i}">
         <span class="fm-index">${String(i + 1).padStart(2, '0')}</span>
         <span class="fm-name">${escapeHtml(s.player?.name ?? '')}</span>
         <span class="fm-fighter">${escapeHtml(s.player?.fighter ?? '')}</span>
       </li>`).join('');
+
+    const obsActions = obsUrl ? `
+      <div class="formation-obs-actions" data-stop-close="true">
+        <a href="${escapeHtml(obsUrl)}" target="_blank" rel="noopener" class="btn btn-secondary btn-sm" id="formation-obs-link">
+          📺 OBS用単体ページを開く
+        </a>
+      </div>` : '';
+
+    const renameBtn = onRename ? `
+      <button type="button" class="formation-rename-btn" id="btn-formation-rename" data-stop-close="true" title="チーム名を変更" aria-label="チーム名を変更">
+        ✎ 名前変更
+      </button>` : '';
 
     overlayEl.style.setProperty('--team-color', team.color);
     overlayEl.innerHTML = `
@@ -215,26 +230,85 @@ export class AnimationManager {
             </svg>
           </div>
           <div class="formation-info">
-            <div class="formation-label">UNIT FORMED // 部隊結成</div>
-            <div class="formation-team-name">${escapeHtml(team.name)}</div>
+            <div class="formation-label-row">
+              <div class="formation-label">UNIT FORMED</div>
+              ${renameBtn}
+            </div>
+            <div class="formation-team-name" id="formation-team-name">${escapeHtml(team.name)}</div>
             <ul class="formation-members">${members}</ul>
           </div>
         </div>
         <div class="formation-bar formation-bar-bottom"></div>
         <div class="formation-controls">
+          ${obsActions}
           <button type="button" class="btn btn-primary btn-formation-next" id="btn-formation-next">
-            <span>次へ進む</span>
+            <span>${escapeHtml(buttonLabel)}</span>
             <span class="shortcut-hint">Space / クリック</span>
           </button>
         </div>
       </div>`;
 
     overlayEl.classList.add('is-active');
-    sound.playFormation();
+    if (playSound) sound.playFormation();
+
+    // オーバーレイ上でのチーム名インライン編集
+    if (onRename) {
+      const btnRename = overlayEl.querySelector('#btn-formation-rename');
+      const nameEl = overlayEl.querySelector('#formation-team-name');
+      let currentName = team.name;
+
+      const startOverlayRename = (e) => {
+        e.stopPropagation();
+        if (overlayEl.querySelector('.formation-rename-input')) return;
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'formation-rename-input';
+        input.value = currentName;
+        input.maxLength = 32;
+        input.setAttribute('data-stop-close', 'true');
+        nameEl.replaceWith(input);
+        input.focus();
+        input.select();
+
+        let committed = false;
+        const finishEdit = (save) => {
+          if (committed) return;
+          committed = true;
+          if (save) {
+            const updated = onRename(input.value);
+            if (updated) currentName = updated;
+          }
+          nameEl.textContent = currentName;
+          input.replaceWith(nameEl);
+        };
+
+        input.addEventListener('keydown', (ke) => {
+          ke.stopPropagation();
+          if (ke.key === 'Enter') {
+            ke.preventDefault();
+            finishEdit(true);
+          } else if (ke.key === 'Escape') {
+            ke.preventDefault();
+            finishEdit(false);
+          }
+        });
+        input.addEventListener('blur', () => finishEdit(true));
+      };
+
+      if (btnRename) btnRename.addEventListener('click', startOverlayRename);
+      if (nameEl) {
+        nameEl.setAttribute('data-stop-close', 'true');
+        nameEl.title = 'クリックしてチーム名を変更';
+        nameEl.addEventListener('click', startOverlayRename);
+      }
+    }
 
     return new Promise(resolve => {
       let done = false;
-      const finish = () => {
+      const finish = (e) => {
+        if (e && e.target && e.target.closest && e.target.closest('[data-stop-close="true"]')) {
+          return;
+        }
         if (done) return;
         done = true;
         overlayEl.removeEventListener('click', finish);

@@ -4,6 +4,7 @@
 
 const STORAGE_KEY = 'smash_3on3_draft_v1';
 const STATE_VERSION = '2.0.0';
+const CHANNEL_NAME = 'smash_3on3_draft_sync';
 
 /**
  * 初期状態を生成
@@ -21,6 +22,7 @@ export function createInitialState() {
     history: [],             // Undoスタック
     settings: {
       seEnabled: true,
+      showFighter: true,     // 使用ファイター表示のON/OFF
       bgMode: 'dark',        // 'dark' | 'transparent' | 'stage'
       spinDurationSec: 3.5,
       teamCount: 0,          // 0 = 未設定（参加者数÷3を使う）
@@ -32,6 +34,28 @@ class StateStore {
   constructor() {
     this.state = this.load() || createInitialState();
     this.listeners = new Set();
+    this.channel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel(CHANNEL_NAME) : null;
+
+    // 別タブ / OBS用チームカード画面とのリアルタイム同期
+    if (this.channel) {
+      this.channel.addEventListener('message', (e) => {
+        if (e.data && e.data.type === 'STATE_SYNC' && e.data.state) {
+          this.state = e.data.state;
+          this.notify();
+        }
+      });
+    }
+    if (typeof window !== 'undefined') {
+      window.addEventListener('storage', (e) => {
+        if (e.key === STORAGE_KEY && e.newValue) {
+          const loaded = this.load();
+          if (loaded) {
+            this.state = loaded;
+            this.notify();
+          }
+        }
+      });
+    }
   }
 
   /**
@@ -102,6 +126,9 @@ class StateStore {
     if (typeof localStorage === 'undefined') return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
+      if (this.channel) {
+        this.channel.postMessage({ type: 'STATE_SYNC', state: this.state });
+      }
     } catch (e) {
       console.warn('LocalStorage save error:', e);
     }
@@ -125,8 +152,9 @@ class StateStore {
         migrated.draftOrderMode = parsed.draftOrderMode || 'round';
         return migrated;
       }
-      // isSpinningなどの一時フラグは解除して復元
+      // isSpinningなどの一時フラグは解除し、後から追加されたsettings項目の既定値を補完して復元
       parsed.isSpinning = false;
+      parsed.settings = { ...createInitialState().settings, ...(parsed.settings || {}) };
       return parsed;
     } catch (e) {
       console.warn('LocalStorage load error:', e);

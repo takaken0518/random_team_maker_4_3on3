@@ -67,10 +67,10 @@ const SFX_DEFINITIONS = [
   {
     key: 'formation',
     filename: 'formation.mp3',
-    duration_seconds: 1.4,
-    prompt_influence: 0.55,
-    description: '部隊結成音（P5×ワートリ風・下からフェードインに合うスタイリッシュなSF出現音）',
-    text: 'Ultra-stylish anime RPG UI card slide-in sound, smooth rising upward whoosh into crisp crystalline sci-fi energy lock-in chime with sleek acid-jazz synth chord stab, clean futuristic finish',
+    duration_seconds: 1.5,
+    prompt_influence: 0.6,
+    description: '部隊結成音（eスポーツ大会風のヒロイックなシンセスティング・重厚なブラス＆シンセヒット）',
+    text: 'Epic esports tournament team lock-in stinger, short punchy heroic hybrid brass and aggressive cyberpunk synth hit with tight sub-bass impact and sharp metallic transient, powerful hype broadcast sound effect',
   },
   {
     key: 'fanfare',
