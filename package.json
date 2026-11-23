@@ -8,7 +8,7 @@
     "start": "node server.js",
     "sfx:list": "node scripts/generate-sfx.mjs --list",
     "sfx:generate": "node scripts/generate-sfx.mjs",
-    "deploy": "aws s3 sync . s3://smash-3on3-team-draft-069089525875/ --exclude \"*\" --include \"index.html\" --include \"team.html\" --include \"index.css\" --include \"sample_participants.csv\" --include \"js/*\" --include \"audio/*\" && aws cloudfront create-invalidation --distribution-id E3V9FHQ10CNA0 --paths \"/*\""
+    "deploy": "git push -u origin main"
   },
   "keywords": [
     "smash",
