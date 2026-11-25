@@ -751,6 +751,7 @@ body.bg-transparent .bg-scan {
     linear-gradient(180deg, color-mix(in srgb, var(--team-color) 7%, transparent) 0%, transparent 45%),
     var(--panel);
 }
+
 .team-card.is-complete:hover,
 .team-card.is-complete:focus-visible {
   transform: translateY(-2px);
@@ -770,6 +771,7 @@ body.bg-transparent .bg-scan {
   opacity: 0.72;
   transition: opacity 0.18s ease, background 0.18s ease, transform 0.18s ease;
 }
+
 .team-card.is-complete:hover .team-zoom-hint,
 .team-card.is-complete:focus-visible .team-zoom-hint {
   opacity: 1;
@@ -788,6 +790,7 @@ body.bg-transparent .bg-scan {
   background: rgba(0, 18, 32, 0.6);
   transition: color 0.15s, border-color 0.15s, background 0.15s;
 }
+
 .team-obs-link:hover {
   color: #fff;
   border-color: var(--team-color);
@@ -803,9 +806,11 @@ body.bg-transparent .bg-scan {
   opacity: 0;
   animation: fadeIn 0.4s ease 1.2s forwards;
 }
+
 .formation-controls:not(:has(.formation-obs-actions)) {
   justify-content: flex-end;
 }
+
 .formation-obs-actions a {
   text-decoration: none;
 }
@@ -852,24 +857,30 @@ body.obs-team-page {
     rgba(4, 13, 23, 0.92);
   cursor: default !important;
 }
+
 .obs-single-compact:hover {
   transform: none !important;
 }
+
 .obs-single-compact .team-emblem-mini {
   width: 34px;
   height: 34px;
   font-size: 16px;
 }
+
 .obs-single-compact .team-title {
   font-size: 22px;
 }
+
 .obs-single-compact .slot-item {
   padding: 10px 14px;
   min-height: 46px;
 }
+
 .obs-single-compact .slot-player-name {
   font-size: 18px;
 }
+
 .obs-single-compact .slot-fighter-name {
   font-size: 14px;
   max-width: 170px;
@@ -936,10 +947,12 @@ body.obs-team-page {
   cursor: pointer;
   transition: all 0.15s ease;
 }
+
 .obs-team-tab:hover {
   color: #fff;
   border-color: var(--team-color, var(--cyan));
 }
+
 .obs-team-tab.is-active {
   color: var(--bg-0);
   background: var(--team-color, var(--cyan));
@@ -1008,10 +1021,12 @@ body.obs-team-page {
   opacity: 0.45;
   transition: opacity 0.15s, color 0.15s, border-color 0.15s, background 0.15s;
 }
+
 .team-card:hover .team-rename-btn,
 .team-rename-btn:focus-visible {
   opacity: 1;
 }
+
 .team-rename-btn:hover {
   color: #fff;
   border-color: var(--team-color);
@@ -1345,6 +1360,7 @@ body.obs-team-page {
   animation: fadeIn 0.4s ease 0.8s forwards;
   transition: color 0.15s, background 0.15s, border-color 0.15s;
 }
+
 .formation-rename-btn:hover {
   color: #fff;
   border-color: var(--team-color);
@@ -2123,9 +2139,11 @@ body.hide-fighter .fm-fighter,
 body.hide-fighter .player-row .pr-fighter {
   display: none !important;
 }
+
 body.hide-fighter .slot-item {
   grid-template-columns: 36px minmax(0, 1fr);
 }
+
 body.hide-fighter .player-row {
   grid-template-columns: 36px minmax(0, 1fr) auto;
 }
@@ -2160,8 +2178,13 @@ body.hide-fighter .player-row {
 /* ---------- タブレット（~1100px） ---------- */
 @media (max-width: 1100px) {
   #app-container {
-    padding: 14px 18px 110px;
+    padding: 14px 18px 140px;
     gap: 14px;
+  }
+
+  #header {
+    flex-wrap: wrap;
+    gap: 10px;
   }
 
   .main-title {
@@ -2169,11 +2192,19 @@ body.hide-fighter .player-row {
   }
 
   .progress-track {
-    width: 140px;
+    width: 120px;
   }
 
   .header-stats {
-    gap: 18px;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  #control-bar {
+    width: max-content;
+    max-width: calc(100vw - 24px);
+    flex-wrap: wrap;
+    justify-content: center;
   }
 
   .formation-content {
@@ -2207,7 +2238,7 @@ body.hide-fighter .player-row {
 /* ---------- モバイル縦（~720px） ---------- */
 @media (max-width: 720px) {
   #app-container {
-    padding: 10px 10px 136px;
+    padding: 10px 10px 210px;
     gap: 10px;
   }
 
@@ -2239,7 +2270,20 @@ body.hide-fighter .player-row {
 
   .header-stats {
     justify-content: space-between;
-    gap: 12px;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+  }
+
+  .view-switcher {
+    flex: 1 1 100%;
+    display: flex;
+  }
+
+  .view-tab {
+    flex: 1;
+    text-align: center;
+    padding: 6px 8px;
+    font-size: 12.5px;
   }
 
   .stat-value {
@@ -2343,15 +2387,15 @@ body.hide-fighter .player-row {
     font-size: 16px;
   }
 
-  /* 操作バー：画面下に固定し、折り返して全幅で表示 */
+  /* 操作バー：高さを抑えたコンパクトグリッドに配置し、折り返して全幅で表示 */
   #control-bar {
     left: 8px;
     right: 8px;
     bottom: 8px;
     transform: none;
     flex-wrap: wrap;
-    gap: 6px;
-    padding: 8px;
+    gap: 5px;
+    padding: 7px;
   }
 
   #control-bar.is-hidden {
@@ -2359,15 +2403,15 @@ body.hide-fighter .player-row {
   }
 
   #control-bar .btn {
-    flex: 1 1 calc(50% - 6px);
-    padding: 10px 8px;
-    font-size: 13px;
+    flex: 1 1 calc(50% - 5px);
+    padding: 8px 6px;
+    font-size: 12.5px;
   }
 
   #control-bar .btn-primary {
     flex: 1 1 100%;
-    padding: 12px;
-    font-size: 15px;
+    padding: 10px;
+    font-size: 14.5px;
   }
 
   #control-bar .shortcut-hint {
@@ -2402,13 +2446,19 @@ body.hide-fighter .player-row {
     text-align: center;
   }
 
+  .formation-label-row {
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
   .formation-label {
     font-size: 11px;
     letter-spacing: 0.25em;
   }
 
   .formation-team-name {
-    font-size: 34px;
+    font-size: 32px;
     margin-bottom: 10px;
   }
 
@@ -2432,9 +2482,12 @@ body.hide-fighter .player-row {
 
   .formation-controls {
     margin-top: 14px;
-    justify-content: stretch;
+    flex-direction: column-reverse;
+    align-items: stretch;
+    gap: 8px;
   }
 
+  .formation-obs-actions .btn,
   .btn-formation-next {
     width: 100%;
   }
@@ -2506,7 +2559,7 @@ body.hide-fighter .player-row {
   #toast {
     left: 10px;
     right: 10px;
-    bottom: 150px;
+    bottom: 200px;
     text-align: center;
   }
 }
@@ -2522,12 +2575,17 @@ body.hide-fighter .player-row {
   }
 
   #control-bar .btn {
-    font-size: 12px;
-    padding: 9px 6px;
+    font-size: 11.5px;
+    padding: 8px 4px;
   }
 
   .player-form {
     grid-template-columns: 1fr;
+  }
+
+  .team-header {
+    flex-wrap: wrap;
+    row-gap: 6px;
   }
 }
 
@@ -2935,9 +2993,11 @@ body.hide-fighter .player-row {
     stroke-width: 4.5px;
     filter: drop-shadow(0 0 14px #fff) drop-shadow(0 0 20px var(--conn-color, var(--green)));
   }
+
   75% {
     stroke-width: 3.6px;
   }
+
   100% {
     stroke-dashoffset: 0;
     stroke-width: 3px;
@@ -2962,10 +3022,12 @@ body.hide-fighter .player-row {
     opacity: 0;
     transform: scale(0.2);
   }
+
   70% {
     opacity: 1;
     transform: scale(1.75);
   }
+
   100% {
     opacity: 1;
     transform: scale(1);
@@ -3077,7 +3139,7 @@ body.hide-fighter .player-row {
   transition: background 0.16s, border-color 0.16s, opacity 0.16s;
 }
 
-.b-slot + .b-slot {
+.b-slot+.b-slot {
   border-top: 1px solid rgba(130, 195, 220, 0.1);
 }
 
@@ -3289,6 +3351,7 @@ body.obs-bracket-page {
 .slot-item.is-draggable-slot {
   cursor: grab;
 }
+
 .slot-item.is-draggable-slot:active {
   cursor: grabbing;
 }
@@ -3350,13 +3413,25 @@ body.obs-bracket-page {
 }
 
 @keyframes bbFadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes bbFadeOut {
-  from { opacity: 1; transform: scale(1); }
-  to { opacity: 0; transform: scale(1.04); }
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(1.04);
+  }
 }
 
 .bb-scanline {
@@ -3370,10 +3445,23 @@ body.obs-bracket-page {
 }
 
 @keyframes bbScanSweep {
-  0% { top: 18%; opacity: 0; }
-  20% { opacity: 1; }
-  80% { opacity: 1; }
-  100% { top: 82%; opacity: 0; }
+  0% {
+    top: 18%;
+    opacity: 0;
+  }
+
+  20% {
+    opacity: 1;
+  }
+
+  80% {
+    opacity: 1;
+  }
+
+  100% {
+    top: 82%;
+    opacity: 0;
+  }
 }
 
 .bb-inner {
@@ -3393,6 +3481,7 @@ body.obs-bracket-page {
     opacity: 0;
     transform: scaleX(0.35) scaleY(0.8);
   }
+
   100% {
     opacity: 1;
     transform: scaleX(1) scaleY(1);
@@ -3440,6 +3529,7 @@ body.obs-bracket-page {
     opacity: 0;
     transform: translateY(14px);
   }
+
   100% {
     opacity: 1;
     transform: translateY(0);
@@ -3458,10 +3548,12 @@ body.obs-bracket-page {
     border-color: var(--cyan);
     box-shadow: 0 0 18px rgba(0, 229, 255, 0.45);
   }
+
   70% {
     opacity: 1;
     transform: translateX(2px) scale(1.01);
   }
+
   100% {
     opacity: 1;
     transform: none;
@@ -3490,6 +3582,7 @@ body.obs-bracket-page {
     background: linear-gradient(90deg, rgba(61, 255, 168, 0.5), rgba(0, 229, 255, 0.25));
     box-shadow: 0 0 22px rgba(61, 255, 168, 0.55);
   }
+
   100% {
     transform: none;
   }
@@ -3508,6 +3601,7 @@ body.obs-bracket-page {
     box-shadow: 0 0 28px rgba(61, 255, 168, 0.75), inset 0 0 18px rgba(61, 255, 168, 0.35);
     transform: scale(1.025);
   }
+
   100% {
     transform: scale(1);
   }
@@ -3534,14 +3628,22 @@ body.obs-bracket-page {
     transform: scale(1.04);
     box-shadow: 0 0 24px var(--team-color, var(--green));
   }
+
   100% {
     transform: scale(1);
   }
 }
 
 @keyframes slotWinSweep {
-  0% { transform: translateX(-100%); opacity: 1; }
-  100% { transform: translateX(100%); opacity: 0; }
+  0% {
+    transform: translateX(-100%);
+    opacity: 1;
+  }
+
+  100% {
+    transform: translateX(100%);
+    opacity: 0;
+  }
 }
 
 .b-slot.is-just-won .b-win-tag {
@@ -3549,9 +3651,20 @@ body.obs-bracket-page {
 }
 
 @keyframes winTagPop {
-  0% { transform: scale(0.2); opacity: 0; }
-  70% { transform: scale(1.25); opacity: 1; }
-  100% { transform: scale(1); opacity: 1; }
+  0% {
+    transform: scale(0.2);
+    opacity: 0;
+  }
+
+  70% {
+    transform: scale(1.25);
+    opacity: 1;
+  }
+
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 /* 敗北したスロットの減衰 */
@@ -3560,9 +3673,19 @@ body.obs-bracket-page {
 }
 
 @keyframes slotLoseDim {
-  0% { opacity: 1; transform: translateX(0); }
-  40% { transform: translateX(-4px); }
-  100% { opacity: 0.45; transform: translateX(0); }
+  0% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  40% {
+    transform: translateX(-4px);
+  }
+
+  100% {
+    opacity: 0.45;
+    transform: translateX(0);
+  }
 }
 
 /* 次ラウンドへ進出したチームのスライドイン＆グロー */
@@ -3594,10 +3717,12 @@ body.obs-bracket-page {
     background: linear-gradient(90deg, rgba(0, 229, 255, 0.45), rgba(61, 255, 168, 0.25));
     box-shadow: 0 0 26px rgba(0, 229, 255, 0.65);
   }
+
   60% {
     opacity: 1;
     transform: translateX(3px) scale(1.02);
   }
+
   100% {
     opacity: 1;
     transform: none;
@@ -3633,10 +3758,12 @@ body.obs-bracket-page {
     background: linear-gradient(90deg, rgba(255, 194, 61, 0.45), rgba(255, 77, 109, 0.2));
     box-shadow: 0 0 24px rgba(255, 194, 61, 0.6);
   }
+
   65% {
     opacity: 1;
     transform: translateY(2px) scale(1.015);
   }
+
   100% {
     opacity: 1;
     transform: none;
@@ -3644,8 +3771,17 @@ body.obs-bracket-page {
 }
 
 @keyframes badgeFadeOut {
-  0%, 55% { opacity: 1; transform: translateX(0); }
-  100% { opacity: 0; transform: translateX(8px); }
+
+  0%,
+  55% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateX(8px);
+  }
 }
 
 /* 両チームが揃って READY になった試合カードのパルス */
@@ -3658,6 +3794,7 @@ body.obs-bracket-page {
     border-color: var(--cyan);
     box-shadow: 0 0 26px rgba(0, 229, 255, 0.65);
   }
+
   100% {
     border-color: rgba(0, 229, 255, 0.55);
   }
@@ -3675,6 +3812,7 @@ body.obs-bracket-page {
     color: var(--green);
     text-shadow: 0 0 12px var(--green);
   }
+
   100% {
     transform: scale(1);
   }
@@ -3692,9 +3830,11 @@ body.obs-bracket-page {
     border-color: var(--red);
     box-shadow: 0 0 36px rgba(255, 77, 109, 0.85), inset 0 0 22px rgba(255, 194, 61, 0.5);
   }
+
   55% {
     transform: scale(1.04);
   }
+
   100% {
     opacity: 1;
     transform: scale(1);
@@ -3720,13 +3860,25 @@ body.obs-bracket-page {
 }
 
 @keyframes ccFadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes ccFadeOut {
-  from { opacity: 1; transform: scale(1); }
-  to { opacity: 0; transform: scale(1.05); }
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(1.05);
+  }
 }
 
 .cc-flash {
@@ -3767,6 +3919,7 @@ body.obs-bracket-page {
     opacity: 0;
     transform: scale(0.78) translateY(24px);
   }
+
   100% {
     opacity: 1;
     transform: scale(1) translateY(0);
@@ -3836,4 +3989,232 @@ body.obs-bracket-page {
   letter-spacing: 0.24em;
   color: var(--text-sub);
   opacity: 0.8;
+}
+
+/* ==========================================================================
+   トーナメント画面・OBS単体ページ（team.html / bracket.html）レスポンシブ対応
+   ========================================================================== */
+
+.stage-tournament-cta .btn {
+  max-width: 100%;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.35;
+}
+
+@media (max-width: 1100px) {
+  .tournament-toolbar {
+    padding: 12px 16px;
+  }
+
+  body.obs-team-page:has(#obs-helper-bar:not(.is-hidden)) {
+    padding-bottom: 130px;
+  }
+
+  body.obs-bracket-page:has(#obs-helper-bar:not(.is-hidden)) {
+    padding-bottom: 140px;
+  }
+}
+
+@media (max-width: 720px) {
+
+  /* トーナメント上部ツールバー */
+  .tournament-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 12px 14px;
+  }
+
+  .tournament-toolbar-title {
+    font-size: 17px;
+  }
+
+  .tournament-toolbar-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+
+  .tournament-toolbar-actions .btn {
+    width: 100%;
+    padding: 9px 8px;
+    font-size: 12.5px;
+    white-space: normal;
+    text-align: center;
+    line-height: 1.25;
+  }
+
+  /* 優勝バナー */
+  .b-champion-banner {
+    padding: 12px 14px;
+  }
+
+  .b-champ-main {
+    gap: 12px;
+  }
+
+  .b-champ-emblem {
+    width: 40px;
+    height: 40px;
+    font-size: 18px;
+  }
+
+  /* トーナメントセクション・ツリー */
+  .b-section {
+    padding: 12px 12px 14px;
+  }
+
+  .b-section-header {
+    gap: 8px;
+    padding-bottom: 10px;
+    margin-bottom: 10px;
+  }
+
+  .b-section-title {
+    font-size: 14px;
+  }
+
+  .b-section-hint {
+    margin-left: 0;
+    width: 100%;
+    font-size: 11.5px;
+  }
+
+  .b-tree-grid {
+    gap: 24px;
+  }
+
+  .b-round-col {
+    width: 248px;
+  }
+
+  /* トーナメント作成カットイン・優勝カットイン */
+  .bb-inner {
+    width: 92vw;
+    padding: 16px 18px;
+  }
+
+  .bb-kicker {
+    font-size: 10px;
+    letter-spacing: 0.16em;
+  }
+
+  .bb-title {
+    font-size: clamp(18px, 6vw, 26px);
+    letter-spacing: 0.12em;
+  }
+
+  .bb-sub {
+    font-size: 11.5px;
+    letter-spacing: 0.1em;
+  }
+
+  .cc-card {
+    padding: 22px 18px;
+  }
+
+  .cc-crown {
+    letter-spacing: 0.18em;
+    margin-bottom: 14px;
+  }
+
+  .cc-main {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .cc-emblem {
+    width: 60px;
+    height: 60px;
+    font-size: 28px;
+  }
+
+  .cc-info {
+    text-align: center;
+  }
+
+  /* OBS単体ページ (team.html / bracket.html) */
+  body.obs-team-page {
+    padding: 12px 10px;
+  }
+
+  body.obs-team-page:has(#obs-helper-bar:not(.is-hidden)) {
+    justify-content: flex-start;
+    padding-bottom: 210px;
+  }
+
+  body.obs-bracket-page {
+    padding: 12px 10px 96px;
+  }
+
+  body.obs-bracket-page:has(#obs-helper-bar:not(.is-hidden)) {
+    padding-bottom: 210px;
+  }
+
+  .obs-helper-bar {
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    width: auto;
+    transform: none;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .obs-helper-group {
+    justify-content: space-between;
+  }
+
+  .obs-team-tabs {
+    width: 100%;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 2px;
+  }
+
+  .obs-team-tab {
+    flex-shrink: 0;
+  }
+
+  .obs-helper-actions {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+  }
+
+  .obs-helper-actions .btn {
+    width: 100%;
+    padding: 7px 6px;
+    font-size: 11.5px;
+  }
+}
+
+@media (max-width: 380px) {
+  .tournament-toolbar-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .b-round-col {
+    width: 228px;
+  }
+
+  .obs-single-compact {
+    padding: 12px 12px 14px;
+  }
+
+  .obs-single-compact .team-title {
+    font-size: 18px;
+  }
+
+  .obs-single-compact .slot-player-name {
+    font-size: 16px;
+  }
+
+  .obs-single-compact .slot-fighter-name {
+    max-width: 115px;
+    font-size: 12px;
+  }
 }
