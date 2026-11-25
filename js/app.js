@@ -7,8 +7,14 @@ import {
   createPlayer, readCsvFile, validateTeamConfig, recommendedTeamCount, SAMPLE_PLAYERS,
 } from './participants.js';
 import {
-  initializeDraft, getCurrentStep, selectNextWinner, commitWinner, undoStep, renameTeam, TEAM_COLORS,
+  initializeDraft, getCurrentStep, selectNextWinner, commitWinner, undoStep, renameTeam, swapTeamSlots, TEAM_COLORS,
 } from './draft-engine.js';
+import {
+  generateAndSaveTournament, updateMatchResult, resetTournamentResults, swapTournamentSlots,
+} from './tournament-engine.js';
+import {
+  renderTournamentBracket, encodeTournamentSnapshot,
+} from './bracket-renderer.js';
 import { animation } from './animation.js';
 import { sound } from './audio.js';
 
@@ -38,6 +44,20 @@ const dom = {
   bgModeLabel: $('bg-mode-label'),
   btnReset: $('btn-reset'),
   formationOverlay: $('formation-overlay'),
+  // ビュー切替 & トーナメント
+  tabViewDraft: $('tab-view-draft'),
+  tabViewTournament: $('tab-view-tournament'),
+  draftViewContainer: $('draft-view-container'),
+  tournamentViewContainer: $('tournament-view-container'),
+  stageTournamentCta: $('stage-tournament-cta'),
+  btnStageCreateTournament: $('btn-stage-create-tournament'),
+  btnOpenTournament: $('btn-open-tournament'),
+  btnShuffleTournament: $('btn-shuffle-tournament'),
+  btnResetTournamentScores: $('btn-reset-tournament-scores'),
+  linkObsBracket: $('link-obs-bracket'),
+  btnBackToDraft: $('btn-back-to-draft'),
+  tournamentMetaBadge: $('tournament-meta-badge'),
+  tournamentBracketMount: $('tournament-bracket-mount'),
   // 参加者モーダル
   modalParticipants: $('modal-participants'),
   playerForm: $('player-form'),
@@ -80,6 +100,8 @@ let editingId = null;
 let teamCountTouched = false;
 // ダイアログを開く前のフォーカス要素（E2-05: 閉じた後に元の操作位置へ戻す）
 let lastFocusedBeforeModal = null;
+// 現在のメイン表示モード ('draft' | 'tournament')
+let activeView = 'draft';
 
 function escapeHtml(str) {
   return String(str ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -156,11 +178,20 @@ function renderUI(state) {
     setStageTarget(null);
     dom.stageStatus.textContent = 'NO DATA';
     setStageSystemLabel('NO DATA', '参加者を登録してください');
+    if (dom.stageTournamentCta) dom.stageTournamentCta.classList.add('is-hidden');
   } else if (!step) {
     setStageTarget(null);
     dom.stageStatus.textContent = 'COMPLETE';
     if (!state.isSpinning) {
       setStageSystemLabel('ALL UNITS READY', '全チーム確定');
+    }
+    if (dom.stageTournamentCta) {
+      dom.stageTournamentCta.classList.toggle('is-hidden', state.isSpinning || state.teams.length < 2);
+      if (dom.btnStageCreateTournament) {
+        dom.btnStageCreateTournament.textContent = state.tournament
+          ? '🏆 ダブルイリミネーション・トーナメント表を開く'
+          : '🏆 ダブルイリミネーション・トーナメントをランダム作成';
+      }
     }
   } else {
     setStageTarget(step, state.teams[step.teamIndex]);
@@ -168,6 +199,14 @@ function renderUI(state) {
     if (!state.isSpinning && done === 0) {
       setStageSystemLabel('READY', 'Space で抽選開始');
     }
+    if (dom.stageTournamentCta) dom.stageTournamentCta.classList.add('is-hidden');
+  }
+
+  if (dom.btnOpenTournament) {
+    dom.btnOpenTournament.disabled = state.isSpinning || state.teams.length < 2;
+    dom.btnOpenTournament.innerHTML = state.tournament
+      ? '<span>🏆 トーナメント表</span>'
+      : '<span>🏆 トーナメント作成</span>';
   }
 
   const showFighter = state.settings.showFighter !== false;
@@ -182,6 +221,61 @@ function renderUI(state) {
   }
 
   renderTeamsGrid(state, step);
+  renderTournamentSection(state);
+}
+
+function switchView(view) {
+  activeView = view === 'tournament' ? 'tournament' : 'draft';
+  const isTournament = activeView === 'tournament';
+
+  if (dom.draftViewContainer) dom.draftViewContainer.classList.toggle('is-hidden', isTournament);
+  if (dom.tournamentViewContainer) dom.tournamentViewContainer.classList.toggle('is-hidden', !isTournament);
+
+  if (dom.tabViewDraft) {
+    dom.tabViewDraft.classList.toggle('is-active', !isTournament);
+    dom.tabViewDraft.setAttribute('aria-selected', String(!isTournament));
+  }
+  if (dom.tabViewTournament) {
+    dom.tabViewTournament.classList.toggle('is-active', isTournament);
+    dom.tabViewTournament.setAttribute('aria-selected', String(isTournament));
+  }
+}
+
+function renderTournamentSection(state) {
+  if (!dom.tournamentBracketMount) return;
+  const t = state.tournament;
+  if (dom.tournamentMetaBadge) {
+    if (t) {
+      const byeCount = t.bracketSize - t.teamCount;
+      dom.tournamentMetaBadge.textContent = byeCount > 0
+        ? `${t.teamCount} TEAMS (${t.bracketSize}-BRACKET / ${byeCount} BYE)`
+        : `${t.teamCount} TEAMS (${t.bracketSize}-BRACKET)`;
+    } else {
+      dom.tournamentMetaBadge.textContent = `${state.teams.length} TEAMS`;
+    }
+  }
+  if (dom.linkObsBracket) {
+    const snap = encodeTournamentSnapshot(state);
+    dom.linkObsBracket.href = snap ? `bracket.html?data=${encodeURIComponent(snap)}` : 'bracket.html';
+  }
+  dom.tournamentBracketMount.innerHTML = renderTournamentBracket(t, state.teams, { interactive: true });
+}
+
+function handleOpenOrCreateTournament({ forceShuffle = false } = {}) {
+  const state = store.getState();
+  if (state.isSpinning) return;
+  if (state.teams.length < 2) {
+    showToast('トーナメントを作成するには2チーム以上必要です');
+    return;
+  }
+
+  if (!state.tournament || forceShuffle) {
+    sound.init();
+    sound.playFormation();
+    generateAndSaveTournament({ shuffle: true });
+    showToast(`${state.teams.length}チームをランダムに振り分けてトーナメント表を生成しました！`);
+  }
+  switchView('tournament');
 }
 
 function setStageTarget(step, team) {
@@ -223,13 +317,19 @@ function renderTeamsGrid(state, step) {
     const slots = team.slots.map((slot, s) => {
       const isActive = isTarget && step.slotIndex === s && !slot.player;
       const justIn = lastConfirmed && lastConfirmed.teamIndex === t && lastConfirmed.slotIndex === s;
-      const cls = ['slot-item', slot.player ? 'is-filled' : '', isActive ? 'is-active-drawing' : '', justIn ? 'is-just-confirmed' : '']
-        .filter(Boolean).join(' ');
+      const canDrag = Boolean(slot.player) && !state.isSpinning;
+      const cls = [
+        'slot-item',
+        slot.player ? 'is-filled' : '',
+        canDrag ? 'is-draggable-slot' : '',
+        isActive ? 'is-active-drawing' : '',
+        justIn ? 'is-just-confirmed' : '',
+      ].filter(Boolean).join(' ');
       const body = slot.player
-        ? `<span class="slot-player-name" title="${escapeHtml(slot.player.name)}">${escapeHtml(slot.player.name)}</span>
+        ? `<span class="slot-player-name" title="${escapeHtml(slot.player.name)}（ドラッグで他の枠と入れ替え可）"><span class="slot-drag-handle" aria-hidden="true">⠿</span>${escapeHtml(slot.player.name)}</span>
            ${slot.player.fighter ? `<span class="slot-fighter-name" title="${escapeHtml(slot.player.fighter)}">${escapeHtml(slot.player.fighter)}</span>` : '<span></span>'}`
         : `<span class="slot-waiting-text">${isActive ? '▶ NEXT DRAW' : 'VACANT'}</span>`;
-      return `<li class="${cls}"><span class="slot-label">${slot.label}</span>${body}</li>`;
+      return `<li class="${cls}" data-team-index="${t}" data-slot-index="${s}" ${canDrag ? 'draggable="true"' : ''}><span class="slot-label">${slot.label}</span>${body}</li>`;
     }).join('');
 
     return `
@@ -572,13 +672,199 @@ function initApp() {
   renderUI(store.getState());
 
   // 操作バー
-  dom.btnDrawNext.addEventListener('click', () => { sound.init(); handleDrawNext(); });
+  dom.btnDrawNext.addEventListener('click', () => {
+    sound.init();
+    if (activeView === 'tournament') switchView('draft');
+    handleDrawNext();
+  });
   // 抽選中にステージをクリックするとスキップ（時短）
-  dom.stageCard.addEventListener('click', () => animation.skipRoulette());
+  dom.stageCard.addEventListener('click', (e) => {
+    if (e.target.closest('#stage-tournament-cta')) return;
+    animation.skipRoulette();
+  });
   dom.btnUndo.addEventListener('click', handleUndo);
   if (dom.btnToggleFighter) dom.btnToggleFighter.addEventListener('click', handleToggleFighter);
   dom.btnToggleBg.addEventListener('click', handleToggleBg);
   dom.btnOpenParticipants.addEventListener('click', openParticipantsModal);
+
+  // ビュー切替 & トーナメント操作
+  if (dom.tabViewDraft) {
+    dom.tabViewDraft.addEventListener('click', () => switchView('draft'));
+  }
+  if (dom.tabViewTournament) {
+    dom.tabViewTournament.addEventListener('click', () => {
+      const state = store.getState();
+      if (!state.tournament && state.teams.length >= 2) {
+        handleOpenOrCreateTournament({ forceShuffle: true });
+      } else {
+        switchView('tournament');
+      }
+    });
+  }
+  if (dom.btnOpenTournament) {
+    dom.btnOpenTournament.addEventListener('click', () => {
+      if (activeView === 'tournament') {
+        switchView('draft');
+      } else {
+        handleOpenOrCreateTournament({ forceShuffle: false });
+      }
+    });
+  }
+  if (dom.btnStageCreateTournament) {
+    dom.btnStageCreateTournament.addEventListener('click', (e) => {
+      e.stopPropagation();
+      handleOpenOrCreateTournament({ forceShuffle: false });
+    });
+  }
+  if (dom.btnShuffleTournament) {
+    dom.btnShuffleTournament.addEventListener('click', () => {
+      const state = store.getState();
+      if (!state.teams || state.teams.length < 2) return;
+      const hasProgress = state.tournament && Object.values(state.tournament.matches || {}).some(
+        m => !m.isAutoResolved && m.status === 'completed'
+      );
+      if (hasProgress && !confirm('進行中の試合結果があります。再シャッフルすると試合結果がリセットされますがよろしいですか？')) {
+        return;
+      }
+      handleOpenOrCreateTournament({ forceShuffle: true });
+    });
+  }
+  if (dom.btnResetTournamentScores) {
+    dom.btnResetTournamentScores.addEventListener('click', () => {
+      const state = store.getState();
+      if (!state.tournament) return;
+      if (!confirm('現在のトーナメント配置のまま、すべての勝敗とスコアを初期状態に戻しますか？')) return;
+      resetTournamentResults();
+      showToast('トーナメントの試合結果をリセットしました');
+    });
+  }
+  if (dom.btnBackToDraft) {
+    dom.btnBackToDraft.addEventListener('click', () => switchView('draft'));
+  }
+
+  // トーナメント表内のクリック操作（勝者選択・スコア増減・勝敗取消）
+  if (dom.tournamentBracketMount) {
+    dom.tournamentBracketMount.addEventListener('click', (e) => {
+      // スコア増減ボタン
+      const scoreBtn = e.target.closest('.b-score-btn');
+      if (scoreBtn) {
+        e.stopPropagation();
+        const matchId = scoreBtn.dataset.matchId;
+        const slot = scoreBtn.dataset.slot;
+        const delta = parseInt(scoreBtn.dataset.scoreDelta, 10) || 0;
+        const m = store.getState().tournament?.matches?.[matchId];
+        if (!m) return;
+        if (slot === 'A') {
+          updateMatchResult(matchId, { scoreA: (m.scoreA || 0) + delta });
+        } else {
+          updateMatchResult(matchId, { scoreB: (m.scoreB || 0) + delta });
+        }
+        return;
+      }
+
+      // 勝敗取消ボタン
+      const clearBtn = e.target.closest('.b-match-clear');
+      if (clearBtn) {
+        e.stopPropagation();
+        const matchId = clearBtn.dataset.clearMatch;
+        updateMatchResult(matchId, { winnerSlot: null });
+        showToast('試合の勝敗を取り消しました');
+        return;
+      }
+
+      // チーム行クリックで勝者確定
+      const winSlotEl = e.target.closest('.b-slot.is-clickable[data-win-slot]');
+      if (winSlotEl) {
+        const matchId = winSlotEl.dataset.matchId;
+        const winSlot = winSlotEl.dataset.winSlot;
+        const prevChamp = store.getState().tournament?.championTeamIndex;
+        sound.init();
+        sound.playLockOn();
+        const updated = updateMatchResult(matchId, { winnerSlot: winSlot });
+        if (updated && updated.championTeamIndex !== null && updated.championTeamIndex !== prevChamp) {
+          const champTeam = store.getState().teams[updated.championTeamIndex];
+          sound.playFanfare();
+          showToast(`🏆 優勝は「${champTeam?.name || 'TEAM'}」に決定しました！`, 4500);
+        }
+      }
+    });
+
+    dom.tournamentBracketMount.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.code === 'Space') {
+        const winSlotEl = e.target.closest('.b-slot.is-clickable[data-win-slot]');
+        if (winSlotEl && !e.target.closest('.b-score-btn')) {
+          e.preventDefault();
+          winSlotEl.click();
+        }
+      }
+    });
+
+    // トーナメント表内でのドラッグ＆ドロップによるチーム配置入れ替え
+    let draggedBracketSlot = null;
+    dom.tournamentBracketMount.addEventListener('dragstart', (e) => {
+      const slotEl = e.target.closest('.b-slot[draggable="true"][data-swap-match]');
+      if (!slotEl) {
+        e.preventDefault();
+        return;
+      }
+      draggedBracketSlot = {
+        matchId: slotEl.dataset.swapMatch,
+        slot: slotEl.dataset.swapSlot,
+      };
+      slotEl.classList.add('is-dragging');
+      if (e.dataTransfer) {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', JSON.stringify(draggedBracketSlot));
+      }
+    });
+    dom.tournamentBracketMount.addEventListener('dragend', () => {
+      draggedBracketSlot = null;
+      dom.tournamentBracketMount.querySelectorAll('.is-dragging, .is-drag-over').forEach(el => {
+        el.classList.remove('is-dragging', 'is-drag-over');
+      });
+    });
+    dom.tournamentBracketMount.addEventListener('dragover', (e) => {
+      if (!draggedBracketSlot) return;
+      const targetEl = e.target.closest('.b-slot.is-drop-target[data-swap-match]');
+      if (!targetEl) return;
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+      dom.tournamentBracketMount.querySelectorAll('.is-drag-over').forEach(el => {
+        if (el !== targetEl) el.classList.remove('is-drag-over');
+      });
+      targetEl.classList.add('is-drag-over');
+    });
+    dom.tournamentBracketMount.addEventListener('dragleave', (e) => {
+      const targetEl = e.target.closest('.b-slot.is-drop-target');
+      if (targetEl && !targetEl.contains(e.relatedTarget)) {
+        targetEl.classList.remove('is-drag-over');
+      }
+    });
+    dom.tournamentBracketMount.addEventListener('drop', (e) => {
+      if (!draggedBracketSlot) return;
+      const targetEl = e.target.closest('.b-slot.is-drop-target[data-swap-match]');
+      dom.tournamentBracketMount.querySelectorAll('.is-dragging, .is-drag-over').forEach(el => {
+        el.classList.remove('is-dragging', 'is-drag-over');
+      });
+      if (!targetEl) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      const to = {
+        matchId: targetEl.dataset.swapMatch,
+        slot: targetEl.dataset.swapSlot,
+      };
+      const from = draggedBracketSlot;
+      draggedBracketSlot = null;
+
+      if (from.matchId === to.matchId && from.slot === to.slot) return;
+      if (swapTournamentSlots(from, to)) {
+        sound.init();
+        sound.playDecodeBlip();
+        showToast('トーナメントのチーム配置を入れ替えました');
+      }
+    });
+  }
 
   // チームカード上でのインラインチーム名編集
   const startCardTeamRename = (teamIdx, cardEl) => {
@@ -680,6 +966,72 @@ function initApp() {
     }
   });
 
+  // チームカード間のメンバー入れ替え（ドラッグ＆ドロップ）
+  let draggedTeamSlot = null;
+  dom.teamsGrid.addEventListener('dragstart', (e) => {
+    const slotEl = e.target.closest('.slot-item[draggable="true"]');
+    if (!slotEl || store.getState().isSpinning) {
+      e.preventDefault();
+      return;
+    }
+    draggedTeamSlot = {
+      teamIndex: parseInt(slotEl.dataset.teamIndex, 10),
+      slotIndex: parseInt(slotEl.dataset.slotIndex, 10),
+    };
+    slotEl.classList.add('is-dragging');
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', JSON.stringify(draggedTeamSlot));
+    }
+  });
+  dom.teamsGrid.addEventListener('dragend', () => {
+    draggedTeamSlot = null;
+    dom.teamsGrid.querySelectorAll('.is-dragging, .is-drag-over').forEach(el => {
+      el.classList.remove('is-dragging', 'is-drag-over');
+    });
+  });
+  dom.teamsGrid.addEventListener('dragover', (e) => {
+    if (!draggedTeamSlot) return;
+    const targetSlot = e.target.closest('.slot-item[data-team-index][data-slot-index]');
+    if (!targetSlot) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+    dom.teamsGrid.querySelectorAll('.is-drag-over').forEach(el => {
+      if (el !== targetSlot) el.classList.remove('is-drag-over');
+    });
+    targetSlot.classList.add('is-drag-over');
+  });
+  dom.teamsGrid.addEventListener('dragleave', (e) => {
+    const targetSlot = e.target.closest('.slot-item');
+    if (targetSlot && !targetSlot.contains(e.relatedTarget)) {
+      targetSlot.classList.remove('is-drag-over');
+    }
+  });
+  dom.teamsGrid.addEventListener('drop', (e) => {
+    if (!draggedTeamSlot) return;
+    const targetSlot = e.target.closest('.slot-item[data-team-index][data-slot-index]');
+    dom.teamsGrid.querySelectorAll('.is-dragging, .is-drag-over').forEach(el => {
+      el.classList.remove('is-dragging', 'is-drag-over');
+    });
+    if (!targetSlot) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const to = {
+      teamIndex: parseInt(targetSlot.dataset.teamIndex, 10),
+      slotIndex: parseInt(targetSlot.dataset.slotIndex, 10),
+    };
+    const from = draggedTeamSlot;
+    draggedTeamSlot = null;
+
+    if (from.teamIndex === to.teamIndex && from.slotIndex === to.slotIndex) return;
+    if (swapTeamSlots(from, to)) {
+      sound.init();
+      sound.playDecodeBlip();
+      showToast('メンバーの配置を入れ替えました（Zキーで戻せます）');
+    }
+  });
+
   // 参加者モーダル
   dom.btnCloseParticipants.addEventListener('click', closeParticipantsModal);
   dom.btnCancelParticipants.addEventListener('click', closeParticipantsModal);
@@ -756,6 +1108,8 @@ function initApp() {
     }
 
     if (e.code === 'Space' || e.code === 'Enter') {
+      // トーナメント画面表示中はSpaceでの誤抽選を防ぐ
+      if (activeView === 'tournament') return;
       // ボタン等にフォーカスがある状態でEnter/Spaceを押した時の二重発火を防止
       if (document.activeElement && document.activeElement !== document.body && document.activeElement !== dom.btnDrawNext) {
         if (e.code === 'Enter') return;

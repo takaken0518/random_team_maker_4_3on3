@@ -36,6 +36,14 @@
         </div>
       </div>
       <div class="header-stats">
+        <div class="view-switcher" role="tablist" aria-label="画面モード切替">
+          <button type="button" class="view-tab is-active" id="tab-view-draft" role="tab" aria-selected="true">
+            🎲 チームドラフト
+          </button>
+          <button type="button" class="view-tab" id="tab-view-tournament" role="tab" aria-selected="false">
+            🏆 トーナメント表
+          </button>
+        </div>
         <div class="stat">
           <div class="stat-label">DRAFTED</div>
           <div class="stat-value"><span id="progress-current">0</span><small>/<span id="progress-total">0</span></small>
@@ -51,39 +59,77 @@
       </div>
     </header>
 
-    <!-- ルーレットステージ -->
-    <section id="stage-area" aria-label="ドラフトルーレット">
-      <div class="stage-card panel" id="stage-card">
-        <div class="stage-meta">
-          <div class="stage-target">
-            <span class="meta-label">TARGET UNIT</span>
-            <div class="stage-target-row">
-              <span class="stage-team" id="stage-team">----</span>
-              <span class="stage-slot" id="stage-slot"></span>
+    <div id="draft-view-container">
+      <!-- ルーレットステージ -->
+      <section id="stage-area" aria-label="ドラフトルーレット">
+        <div class="stage-card panel" id="stage-card">
+          <div class="stage-meta">
+            <div class="stage-target">
+              <span class="meta-label">TARGET UNIT</span>
+              <div class="stage-target-row">
+                <span class="stage-team" id="stage-team">----</span>
+                <span class="stage-slot" id="stage-slot"></span>
+              </div>
+            </div>
+            <div class="stage-status" id="stage-status">STANDBY</div>
+            <div class="stage-remaining">
+              <span class="meta-label">REMAINING</span>
+              <span class="stage-remaining-value"><span id="stage-remaining">0</span><small
+                  class="unit-suffix">PLAYERS</small></span>
             </div>
           </div>
-          <div class="stage-status" id="stage-status">STANDBY</div>
-          <div class="stage-remaining">
-            <span class="meta-label">REMAINING</span>
-            <span class="stage-remaining-value"><span id="stage-remaining">0</span><small
-                class="unit-suffix">PLAYERS</small></span>
+
+          <div class="stage-display">
+            <span class="reticle r-tl" aria-hidden="true"></span><span class="reticle r-tr" aria-hidden="true"></span>
+            <span class="reticle r-bl" aria-hidden="true"></span><span class="reticle r-br" aria-hidden="true"></span>
+            <div class="stage-scanline" aria-hidden="true"></div>
+            <div class="stage-player-name" id="stage-player-name">READY</div>
+            <div class="stage-fighter-name" id="stage-fighter-name"></div>
+          </div>
+
+          <!-- 全チーム確定後に表示されるトーナメント作成CTA -->
+          <div class="stage-tournament-cta is-hidden" id="stage-tournament-cta">
+            <button type="button" class="btn btn-accent" id="btn-stage-create-tournament">
+              🏆 ダブルイリミネーション・トーナメントをランダム作成
+            </button>
           </div>
         </div>
+      </section>
 
-        <div class="stage-display">
-          <span class="reticle r-tl" aria-hidden="true"></span><span class="reticle r-tr" aria-hidden="true"></span>
-          <span class="reticle r-bl" aria-hidden="true"></span><span class="reticle r-br" aria-hidden="true"></span>
-          <div class="stage-scanline" aria-hidden="true"></div>
-          <div class="stage-player-name" id="stage-player-name">READY</div>
-          <div class="stage-fighter-name" id="stage-fighter-name"></div>
+      <!-- チーム一覧 -->
+      <main id="teams-container" aria-label="チーム一覧">
+        <div id="teams-grid"></div>
+      </main>
+    </div>
+
+    <!-- ダブルイリミネーション・トーナメント画面 -->
+    <section id="tournament-view-container" class="is-hidden" aria-label="ダブルイリミネーション・トーナメント表">
+      <div class="tournament-toolbar panel">
+        <div class="tournament-toolbar-info">
+          <span class="meta-label">DOUBLE ELIMINATION BRACKET</span>
+          <div class="tournament-toolbar-title-row">
+            <h2 class="tournament-toolbar-title">TOURNAMENT STAGE</h2>
+            <span class="tournament-meta-badge" id="tournament-meta-badge">0 TEAMS</span>
+          </div>
+        </div>
+        <div class="tournament-toolbar-actions">
+          <button type="button" class="btn btn-primary" id="btn-shuffle-tournament">
+            🎲 ランダム再振り分け
+          </button>
+          <button type="button" class="btn btn-secondary" id="btn-reset-tournament-scores">
+            ↺ 試合結果をリセット
+          </button>
+          <a href="bracket.html" target="_blank" rel="noopener" class="btn btn-secondary" id="link-obs-bracket">
+            📺 OBS用トーナメント単体ページ
+          </a>
+          <button type="button" class="btn btn-secondary" id="btn-back-to-draft">
+            ← チーム一覧に戻る
+          </button>
         </div>
       </div>
-    </section>
 
-    <!-- チーム一覧 -->
-    <main id="teams-container" aria-label="チーム一覧">
-      <div id="teams-grid"></div>
-    </main>
+      <div id="tournament-bracket-mount"></div>
+    </section>
   </div>
 
   <!-- 操作バー -->
@@ -93,6 +139,9 @@
     </button>
     <button type="button" class="btn btn-secondary" id="btn-undo">
       <span>↩ 1手戻す</span><span class="shortcut-hint">Z</span>
+    </button>
+    <button type="button" class="btn btn-accent" id="btn-open-tournament">
+      <span>🏆 トーナメント作成</span>
     </button>
     <button type="button" class="btn btn-secondary" id="btn-open-participants">
       <span>👥 参加者・チーム設定</span>

@@ -2573,3 +2573,671 @@ body.hide-fighter .player-row {
     font-size: 20px;
   }
 }
+
+
+/* ==========================================================================
+   DOUBLE ELIMINATION TOURNAMENT BRACKET — サイバーHUDトーナメント表
+   ========================================================================== */
+
+/* ヘッダーのモード切替タブ */
+.view-switcher {
+  display: inline-flex;
+  background: rgba(0, 14, 24, 0.78);
+  border: 1px solid rgba(0, 229, 255, 0.28);
+  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+  padding: 2px;
+  gap: 2px;
+}
+
+.view-tab {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-sub);
+  background: transparent;
+  border: none;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: color 0.18s, background 0.18s, box-shadow 0.18s;
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+  white-space: nowrap;
+}
+
+.view-tab:hover {
+  color: #fff;
+  background: rgba(0, 229, 255, 0.1);
+}
+
+.view-tab.is-active {
+  color: #021018;
+  font-weight: 900;
+  background: linear-gradient(135deg, var(--cyan), #00a3c4);
+  box-shadow: 0 0 12px var(--cyan-glow);
+}
+
+/* ステージ完了時のトーナメント作成CTA */
+.stage-tournament-cta {
+  display: flex;
+  justify-content: center;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(61, 255, 168, 0.18);
+  animation: fadeIn 0.35s ease;
+}
+
+#draft-view-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+#tournament-view-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* トーナメント上部ツールバー */
+.tournament-toolbar {
+  --cut: 11px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 22px;
+  background:
+    linear-gradient(90deg, rgba(61, 255, 168, 0.07) 0%, transparent 40%),
+    rgba(4, 14, 24, 0.88);
+  border-color: rgba(61, 255, 168, 0.3);
+}
+
+.tournament-toolbar-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tournament-toolbar-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.tournament-toolbar-title {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  color: #fff;
+  text-shadow: 0 0 12px rgba(61, 255, 168, 0.32);
+}
+
+.tournament-meta-badge {
+  font-family: var(--font-hud);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  font-variant-numeric: tabular-nums;
+  padding: 2px 10px;
+  color: var(--green);
+  background: rgba(61, 255, 168, 0.12);
+  border: 1px solid rgba(61, 255, 168, 0.38);
+}
+
+.tournament-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.tournament-toolbar-actions a.btn {
+  text-decoration: none;
+}
+
+/* 優勝チームバナー */
+.b-champion-banner {
+  --cut: 14px;
+  padding: 16px 26px;
+  margin-bottom: 16px;
+  border-color: var(--team-color, var(--amber));
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--team-color, var(--amber)) 24%, transparent) 0%, rgba(4, 14, 24, 0.94) 65%),
+    var(--panel-strong);
+  box-shadow: 0 0 32px -4px color-mix(in srgb, var(--team-color, var(--amber)) 45%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: slideIn 0.45s cubic-bezier(.2, 1.2, .4, 1);
+}
+
+.b-champ-crown {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.28em;
+  color: var(--amber);
+  text-shadow: 0 0 10px rgba(255, 194, 61, 0.5);
+}
+
+.b-champ-main {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.b-champ-emblem {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 900;
+  color: var(--bg-0);
+  background: var(--team-color, var(--amber));
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  box-shadow: 0 0 18px var(--team-color, var(--amber));
+  flex-shrink: 0;
+}
+
+.b-champ-name {
+  font-family: var(--font-display), var(--font-body);
+  font-size: clamp(22px, 3vw, 34px);
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: 0.06em;
+  text-shadow: 0 0 16px var(--team-color, var(--amber));
+  line-height: 1.15;
+}
+
+.b-champ-members {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-fighter);
+  margin-top: 2px;
+}
+
+/* セクション（Winners / Losers） */
+.b-sections-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.b-section {
+  --cut: 12px;
+  padding: 16px 20px 20px;
+  background: rgba(4, 12, 22, 0.84);
+}
+
+.b-section-winners {
+  border-color: rgba(0, 229, 255, 0.28);
+}
+
+.b-section-losers {
+  border-color: rgba(255, 194, 61, 0.26);
+}
+
+.b-section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-bottom: 12px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid rgba(130, 195, 220, 0.14);
+}
+
+.b-section-tag {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  padding: 3px 10px;
+  clip-path: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
+}
+
+.winners-tag {
+  color: #02121a;
+  background: var(--cyan);
+}
+
+.losers-tag {
+  color: #1a1002;
+  background: var(--amber);
+}
+
+.b-section-title {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  color: #fff;
+}
+
+.b-section-hint {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text-sub);
+}
+
+/* トーナメントツリー横スクロールコンテナ */
+.b-tree-scroll {
+  width: 100%;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+
+.b-tree-grid {
+  display: flex;
+  align-items: stretch;
+  gap: 28px;
+  min-width: max-content;
+}
+
+.b-round-col {
+  width: 286px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.b-round-header {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--text-sub);
+  text-transform: uppercase;
+  padding: 6px 12px;
+  margin-bottom: 12px;
+  background: rgba(0, 229, 255, 0.06);
+  border-left: 2px solid var(--cyan);
+}
+
+.b-section-losers .b-round-header {
+  background: rgba(255, 194, 61, 0.06);
+  border-left-color: var(--amber);
+}
+
+.b-round-matches {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  gap: 14px;
+}
+
+.b-match-cell {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+/* ラウンド間の接続ライン風アクセント */
+.b-round-col:not(:last-child) .b-match-cell::after {
+  content: '';
+  position: absolute;
+  right: -20px;
+  top: 50%;
+  width: 16px;
+  height: 1px;
+  background: rgba(0, 229, 255, 0.25);
+  pointer-events: none;
+}
+
+.b-section-losers .b-round-col:not(:last-child) .b-match-cell::after {
+  background: rgba(255, 194, 61, 0.25);
+}
+
+/* マッチカード */
+.b-match {
+  width: 100%;
+  background: rgba(3, 11, 20, 0.9);
+  border: 1px solid rgba(130, 195, 220, 0.18);
+  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.b-match.status-ready {
+  border-color: rgba(0, 229, 255, 0.55);
+  box-shadow: 0 4px 18px -6px rgba(0, 229, 255, 0.28);
+}
+
+.b-match.status-completed {
+  border-color: rgba(61, 255, 168, 0.35);
+}
+
+.b-match.status-inactive {
+  opacity: 0.48;
+  border-style: dashed;
+}
+
+.b-match.is-empty-bye {
+  opacity: 0.3;
+  padding: 4px 10px;
+  border-style: dashed;
+}
+
+.b-match-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.025);
+  border-bottom: 1px solid rgba(130, 195, 220, 0.1);
+  font-family: var(--font-hud);
+  font-size: 11px;
+}
+
+.b-match-code {
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: var(--cyan);
+  letter-spacing: 0.08em;
+}
+
+.b-section-losers .b-match-code {
+  color: var(--amber);
+}
+
+.b-match-status {
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+}
+
+.b-match.status-ready .b-match-status {
+  color: var(--cyan);
+}
+
+.b-match.status-completed .b-match-status {
+  color: var(--green);
+}
+
+.b-match-clear {
+  margin-left: auto;
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-sub);
+  background: transparent;
+  border: 1px solid rgba(130, 195, 220, 0.22);
+  padding: 1px 6px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.b-match-clear:hover {
+  color: #fff;
+  border-color: var(--red);
+  background: rgba(255, 77, 109, 0.18);
+}
+
+.b-match-slots {
+  display: flex;
+  flex-direction: column;
+}
+
+/* マッチ内の各チーム枠 (A / B) */
+.b-slot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  min-height: 46px;
+  border-left: 3px solid transparent;
+  transition: background 0.16s, border-color 0.16s, opacity 0.16s;
+}
+
+.b-slot + .b-slot {
+  border-top: 1px solid rgba(130, 195, 220, 0.1);
+}
+
+.b-slot.is-tbd,
+.b-slot.is-bye {
+  color: var(--text-muted);
+  min-height: 40px;
+}
+
+.b-slot-badge {
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(130, 195, 220, 0.16);
+  color: var(--text-sub);
+  flex-shrink: 0;
+}
+
+.b-slot.is-team {
+  border-left-color: var(--team-color, var(--cyan));
+  background: linear-gradient(90deg, color-mix(in srgb, var(--team-color, var(--cyan)) 10%, transparent) 0%, transparent 75%);
+}
+
+.b-slot.is-clickable {
+  cursor: pointer;
+}
+
+.b-slot.is-clickable:hover,
+.b-slot.is-clickable:focus-visible {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--team-color, var(--cyan)) 24%, rgba(0, 20, 34, 0.9)) 0%, rgba(0, 229, 255, 0.08) 100%);
+}
+
+.b-slot.is-winner {
+  border-left-width: 4px;
+  border-left-color: var(--team-color, var(--green));
+  background: linear-gradient(90deg, color-mix(in srgb, var(--team-color, var(--green)) 24%, rgba(4, 24, 34, 0.92)) 0%, rgba(61, 255, 168, 0.07) 100%);
+}
+
+.b-slot.is-loser {
+  opacity: 0.45;
+  background: rgba(2, 8, 14, 0.6);
+}
+
+.b-slot-emblem {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 900;
+  color: var(--bg-0);
+  background: var(--team-color, var(--cyan));
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  flex-shrink: 0;
+}
+
+.b-slot-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.b-slot-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.b-slot-name {
+  font-family: var(--font-display), var(--font-body);
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.b-slot.is-tbd .b-slot-name,
+.b-slot.is-bye .b-slot-name {
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-sub);
+}
+
+.b-slot-members {
+  font-size: 11px;
+  color: var(--text-sub);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.b-win-tag {
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  padding: 1px 6px;
+  color: #021810;
+  background: var(--green);
+  flex-shrink: 0;
+}
+
+.b-win-hint {
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 1px 5px;
+  color: var(--cyan);
+  border: 1px solid rgba(0, 229, 255, 0.35);
+  opacity: 0;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+
+.b-slot.is-clickable:hover .b-win-hint,
+.b-slot.is-clickable:focus-visible .b-win-hint {
+  opacity: 1;
+}
+
+/* スコアボックス */
+.b-score-box {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: rgba(0, 12, 22, 0.78);
+  border: 1px solid rgba(130, 195, 220, 0.22);
+  padding: 2px 4px;
+  flex-shrink: 0;
+}
+
+.b-score-btn {
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 229, 255, 0.08);
+  border: 1px solid rgba(0, 229, 255, 0.22);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.b-score-btn:hover {
+  background: var(--cyan);
+  color: #021018;
+}
+
+.b-score-val,
+.b-score-static {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  min-width: 18px;
+  text-align: center;
+  color: #fff;
+}
+
+.b-score-static {
+  padding: 2px 6px;
+  background: rgba(0, 12, 22, 0.65);
+  border: 1px solid rgba(130, 195, 220, 0.18);
+}
+
+.b-empty-state {
+  padding: 40px 24px;
+  text-align: center;
+}
+
+.b-empty-title {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  color: var(--cyan);
+  margin-bottom: 8px;
+}
+
+.b-empty-desc {
+  font-size: 14px;
+  color: var(--text-sub);
+}
+
+/* OBS トーナメント単体ページ (bracket.html) */
+body.obs-bracket-page {
+  min-height: 100vh;
+  padding: 18px 24px 96px;
+}
+
+#obs-bracket-stage {
+  max-width: 1880px;
+  margin: 0 auto;
+}
+
+
+/* ---------- ドラッグ＆ドロップ入れ替え（チーム一覧 ＆ トーナメント表） ---------- */
+.slot-item.is-draggable-slot {
+  cursor: grab;
+}
+.slot-item.is-draggable-slot:active {
+  cursor: grabbing;
+}
+
+.slot-drag-handle,
+.b-drag-handle {
+  display: inline-block;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1;
+  margin-right: 5px;
+  opacity: 0.45;
+  cursor: grab;
+  user-select: none;
+  transition: opacity 0.15s, color 0.15s;
+}
+
+.slot-item.is-draggable-slot:hover .slot-drag-handle,
+.b-slot.is-draggable-seed:hover .b-drag-handle {
+  opacity: 1;
+  color: var(--team-color, var(--cyan));
+}
+
+.slot-item.is-dragging,
+.b-slot.is-dragging {
+  opacity: 0.42;
+  outline: 1px dashed var(--cyan);
+}
+
+.slot-item.is-drag-over,
+.b-slot.is-drag-over {
+  outline: 2px solid var(--green) !important;
+  outline-offset: -2px;
+  background: linear-gradient(90deg, rgba(61, 255, 168, 0.25), rgba(0, 229, 255, 0.12)) !important;
+  box-shadow: 0 0 14px rgba(61, 255, 168, 0.35) inset;
+}

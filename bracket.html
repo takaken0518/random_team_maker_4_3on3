@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark">
+  <title>OBS TOURNAMENT BRACKET | スマブラ3on3 UNIT DRAFT</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&family=Noto+Sans+JP:wght@500;700;900&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="index.css">
+</head>
+
+<body class="bg-transparent obs-bracket-page">
+
+  <main id="obs-bracket-stage" aria-label="OBS用ダブルイリミネーション・トーナメント表">
+    <div id="obs-bracket-mount"></div>
+  </main>
+
+  <!-- プレビュー・設定用フローティングバー（?hud=0 または Hキー、またはOBS上で自動非表示） -->
+  <aside id="obs-helper-bar" class="obs-helper-bar" aria-label="OBSトーナメント設定バー">
+    <div class="obs-helper-group">
+      <span class="obs-helper-title">OBS BRACKET VIEW</span>
+      <div class="obs-team-tabs" id="obs-filter-tabs">
+        <button type="button" class="obs-team-tab is-active" data-filter="all">全体 (W+L)</button>
+        <button type="button" class="obs-team-tab" data-filter="winners">Winners &amp; GF</button>
+        <button type="button" class="obs-team-tab" data-filter="losers">Losersのみ</button>
+      </div>
+    </div>
+    <div class="obs-helper-actions">
+      <button type="button" class="btn btn-secondary btn-sm" id="btn-obs-shuffle">
+        🎲 再シャッフル
+      </button>
+      <button type="button" class="btn btn-secondary btn-sm" id="btn-obs-interactive">
+        操作: <strong id="obs-interactive-label">有効</strong>
+      </button>
+      <button type="button" class="btn btn-secondary btn-sm" id="btn-obs-bg">
+        背景: <strong id="obs-bg-label">OBS透過</strong>
+      </button>
+      <button type="button" class="btn btn-primary btn-sm" id="btn-obs-copy-url">
+        🔗 OBS用URLをコピー
+      </button>
+      <button type="button" class="btn btn-secondary btn-sm" id="btn-obs-hide-bar" title="Hキーで再表示">
+        バーを隠す (H)
+      </button>
+    </div>
+  </aside>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+
+  <script type="module" src="js/bracket-view.js"></script>
+</body>
+
+</html>

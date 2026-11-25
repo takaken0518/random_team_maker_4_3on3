@@ -20,6 +20,7 @@ export function createInitialState() {
     undrawnPlayerIds: [],
     isSpinning: false,
     history: [],             // Undoスタック
+    tournament: null,        // ダブルイリミネーション・トーナメント状態
     settings: {
       seEnabled: true,
       showFighter: true,     // 使用ファイター表示のON/OFF
@@ -154,6 +155,7 @@ class StateStore {
       }
       // isSpinningなどの一時フラグは解除し、後から追加されたsettings項目の既定値を補完して復元
       parsed.isSpinning = false;
+      if (parsed.tournament === undefined) parsed.tournament = null;
       parsed.settings = { ...createInitialState().settings, ...(parsed.settings || {}) };
       return parsed;
     } catch (e) {

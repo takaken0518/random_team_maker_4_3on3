@@ -92,6 +92,7 @@ export function initializeDraft(players, teamCount, mode = 'round') {
     undrawnPlayerIds: players.map(p => p.id),
     isSpinning: false,
     history: [],
+    tournament: null,
     settings: { ...state.settings, teamCount },
   });
   return true;
@@ -185,3 +186,40 @@ export function renameTeam(teamIndex, newName) {
   store.setState({ teams, draftQueue, history });
   return finalName;
 }
+
+/**
+ * チーム一覧の2つのスロット間でメンバーを入れ替える（空スロットへの移動も可、Undo履歴対応）
+ * @param {{ teamIndex: number, slotIndex: number }} from
+ * @param {{ teamIndex: number, slotIndex: number }} to
+ * @returns {boolean}
+ */
+export function swapTeamSlots(from, to) {
+  const state = store.getState();
+  if (state.isSpinning) return false;
+  if (!from || !to) return false;
+  if (from.teamIndex === to.teamIndex && from.slotIndex === to.slotIndex) return false;
+
+  const teamA = state.teams?.[from.teamIndex];
+  const teamB = state.teams?.[to.teamIndex];
+  const slotA = teamA?.slots?.[from.slotIndex];
+  const slotB = teamB?.slots?.[to.slotIndex];
+  if (!slotA || !slotB) return false;
+  if (!slotA.player && !slotB.player) return false;
+
+  store.pushHistory();
+
+  const teams = JSON.parse(JSON.stringify(state.teams));
+  const targetA = teams[from.teamIndex].slots[from.slotIndex];
+  const targetB = teams[to.teamIndex].slots[to.slotIndex];
+
+  const tempPlayer = targetA.player;
+  const tempConfirmedAt = targetA.confirmedAt;
+  targetA.player = targetB.player;
+  targetA.confirmedAt = targetB.confirmedAt;
+  targetB.player = tempPlayer;
+  targetB.confirmedAt = tempConfirmedAt;
+
+  store.setState({ teams });
+  return true;
+}
+
