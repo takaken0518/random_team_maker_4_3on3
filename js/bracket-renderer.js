@@ -101,6 +101,8 @@ function renderMatchSlot(match, slotKey, teams, interactive, matches) {
   return `
     <div class="${cls}"
       style="--team-color:${team.color}"
+      data-slot-key="${slotKey}"
+      data-team-index="${slot.teamIndex}"
       ${isSwappable ? 'draggable="true"' : ''}
       ${swapAttrs}
       ${canInteract ? `data-match-id="${match.id}" data-win-slot="${slotKey}" role="button" tabindex="0" title="クリックで「${escapeHtml(team.name)}」の勝利として記録 / ドラッグで配置入れ替え"` : (isSwappable ? `title="ドラッグで「${escapeHtml(team.name)}」の配置を入れ替え"` : '')}>
@@ -252,7 +254,8 @@ export function renderTournamentBracket(tournament, teams, { interactive = true,
           <span class="b-section-hint">${interactive ? '⠿ ドラッグ＆ドロップで1回戦のチーム配置を入れ替え ／ クリックで勝者進出' : 'LIVE TOURNAMENT BRACKET'}</span>
         </div>
         <div class="b-tree-scroll">
-          <div class="b-tree-grid">
+          <div class="b-tree-grid" data-tree-section="winners">
+            <svg class="b-connectors-svg" aria-hidden="true"></svg>
             ${winnersCols}
             ${finalsCols}
           </div>
@@ -267,7 +270,8 @@ export function renderTournamentBracket(tournament, teams, { interactive = true,
           <span class="b-section-hint">Winnersの各ラウンド敗者が交差合流・ここで敗北すると敗退（2敗失格）</span>
         </div>
         <div class="b-tree-scroll">
-          <div class="b-tree-grid is-losers-grid">
+          <div class="b-tree-grid is-losers-grid" data-tree-section="losers">
+            <svg class="b-connectors-svg" aria-hidden="true"></svg>
             ${losersCols}
           </div>
         </div>
@@ -309,4 +313,234 @@ export function decodeTournamentSnapshot(dataParam) {
     console.warn('Failed to decode tournament snapshot:', e);
     return null;
   }
+}
+
+/**
+ * トーナメント進行差分アニメーション用：更新前の各マッチ・スロット状態をキャプチャ
+ * @param {Object|null} tournament
+ * @returns {Object|null}
+ */
+export function captureBracketAnimationSnapshot(tournament) {
+  if (!tournament || !tournament.matches) return null;
+  const matches = {};
+  for (const [id, m] of Object.entries(tournament.matches)) {
+    matches[id] = {
+      status: m.status,
+      winnerTeamIndex: m.winnerTeamIndex,
+      loserTeamIndex: m.loserTeamIndex,
+      teamA: m.teamA?.state === 'TEAM' ? m.teamA.teamIndex : null,
+      teamB: m.teamB?.state === 'TEAM' ? m.teamB.teamIndex : null,
+      scoreA: m.scoreA ?? 0,
+      scoreB: m.scoreB ?? 0,
+    };
+  }
+  return {
+    createdAt: tournament.createdAt,
+    championTeamIndex: tournament.championTeamIndex,
+    needsReset: tournament.needsReset,
+    matches,
+  };
+}
+
+/**
+ * 更新前スナップショットと更新後のトーナメント状態を比較し、
+ * 変化のあったマッチ・スロット要素に進行アニメーション用クラスを付与する
+ * @param {HTMLElement} mountEl
+ * @param {Object|null} prevSnap
+ * @param {Object|null} nextTournament
+ */
+export function applyBracketProgressionAnimations(mountEl, prevSnap, nextTournament) {
+  if (!mountEl || !prevSnap || !nextTournament || !nextTournament.matches) return;
+  if (prevSnap.createdAt !== nextTournament.createdAt) return;
+
+  for (const [id, m] of Object.entries(nextTournament.matches)) {
+    const prev = prevSnap.matches[id];
+    if (!prev) continue;
+
+    const matchEl = mountEl.querySelector(`.b-match[data-match-id="${id}"]`);
+    if (!matchEl) continue;
+
+    const slotAEl = matchEl.querySelector('.b-slot[data-slot-key="A"]');
+    const slotBEl = matchEl.querySelector('.b-slot[data-slot-key="B"]');
+
+    // 1. 勝敗が新たに確定したマッチ
+    if (m.status === 'completed' && (prev.status !== 'completed' || prev.winnerTeamIndex !== m.winnerTeamIndex)) {
+      matchEl.classList.add('is-just-completed');
+      const winSlotEl = matchEl.querySelector('.b-slot.is-winner');
+      const loseSlotEl = matchEl.querySelector('.b-slot.is-loser');
+      if (winSlotEl) winSlotEl.classList.add('is-just-won');
+      if (loseSlotEl) loseSlotEl.classList.add('is-just-lost');
+    }
+
+    // 2. 次ラウンドや Losers Bracket へチームが新規進出したスロット
+    const nextTeamA = m.teamA?.state === 'TEAM' ? m.teamA.teamIndex : null;
+    const nextTeamB = m.teamB?.state === 'TEAM' ? m.teamB.teamIndex : null;
+
+    if (nextTeamA !== null && nextTeamA !== prev.teamA && slotAEl) {
+      slotAEl.classList.add(m.bracket === 'losers' ? 'is-just-dropped-loser' : 'is-just-advanced');
+    }
+    if (nextTeamB !== null && nextTeamB !== prev.teamB && slotBEl) {
+      slotBEl.classList.add(m.bracket === 'losers' ? 'is-just-dropped-loser' : 'is-just-advanced');
+    }
+
+    // 3. 両チームが揃って対戦可能 (READY) になったマッチ
+    if (m.status === 'ready' && prev.status !== 'ready') {
+      matchEl.classList.add('is-just-ready');
+    }
+
+    // 4. スコアが増減したスロット
+    if ((m.scoreA ?? 0) !== prev.scoreA && slotAEl) {
+      const scoreVal = slotAEl.querySelector('.b-score-val, .b-score-static');
+      if (scoreVal) scoreVal.classList.add('is-score-pop');
+    }
+    if ((m.scoreB ?? 0) !== prev.scoreB && slotBEl) {
+      const scoreVal = slotBEl.querySelector('.b-score-val, .b-score-static');
+      if (scoreVal) scoreVal.classList.add('is-score-pop');
+    }
+  }
+
+  // 5. Grand Finals Reset (GF-M2) が発動したとき
+  if (nextTournament.needsReset && !prevSnap.needsReset) {
+    const gf2El = mountEl.querySelector('.b-match[data-match-id="GF-M2"]');
+    if (gf2El) gf2El.classList.add('is-just-reset-activated');
+  }
+}
+
+/**
+ * トーナメントツリー内の各マッチ間を線で結び、勝利確定箇所は線が伸びるアニメーションを描画する
+ * @param {HTMLElement} mountEl - トーナメント表のマウント要素
+ * @param {Object|null} tournament - state.tournament
+ * @param {Array} teams - state.teams
+ * @param {Object|null} prevSnap - 直前のスナップショット（新規確定したラインのみ伸長アニメーションを再生）
+ */
+export function renderBracketConnectors(mountEl, tournament, teams = [], prevSnap = null) {
+  if (!mountEl || !tournament || !tournament.matches) return;
+
+  const isSameTournament = prevSnap && prevSnap.createdAt === tournament.createdAt;
+  const grids = mountEl.querySelectorAll('.b-tree-grid');
+
+  grids.forEach((gridEl) => {
+    const svgEl = gridEl.querySelector('.b-connectors-svg');
+    if (!svgEl) return;
+
+    const gridW = gridEl.scrollWidth || gridEl.offsetWidth;
+    const gridH = gridEl.scrollHeight || gridEl.offsetHeight;
+    if (gridW === 0 || gridH === 0) return;
+
+    svgEl.setAttribute('viewBox', `0 0 ${gridW} ${gridH}`);
+    svgEl.setAttribute('width', String(gridW));
+    svgEl.setAttribute('height', String(gridH));
+
+    const gridRect = gridEl.getBoundingClientRect();
+    const isLosersGrid = gridEl.classList.contains('is-losers-grid');
+    const basePaths = [];
+    const activePaths = [];
+
+    for (const [targetId, targetMatch] of Object.entries(tournament.matches)) {
+      const targetMatchEl = gridEl.querySelector(`.b-match[data-match-id="${targetId}"]`);
+      if (!targetMatchEl) continue;
+
+      const checkAndBuildConnector = (sourceDef, slotKey) => {
+        if (!sourceDef || (sourceDef.type !== 'WINNER_OF' && sourceDef.type !== 'LOSER_OF')) return;
+        const srcId = sourceDef.matchId;
+        const srcMatch = tournament.matches[srcId];
+        if (!srcMatch) return;
+
+        // 同じグリッドセクション内にソースのマッチカードがある場合のみ接続線を描画
+        const srcMatchEl = gridEl.querySelector(`.b-match[data-match-id="${srcId}"]`);
+        if (!srcMatchEl) return;
+
+        // スタート座標: ソースマッチが勝利確定している場合は勝利スロットの右端中央、未確定ならマッチカードの右端中央
+        let startAnchorEl = srcMatchEl;
+        const srcWinSlotEl = srcMatchEl.querySelector('.b-slot.is-winner');
+        if (srcWinSlotEl && sourceDef.type === 'WINNER_OF') {
+          startAnchorEl = srcWinSlotEl;
+        }
+        const srcRect = startAnchorEl.getBoundingClientRect();
+        const x1 = Math.round((srcRect.right - gridRect.left) * 10) / 10;
+        const y1 = Math.round((srcRect.top + srcRect.height / 2 - gridRect.top) * 10) / 10;
+
+        // エンド座標: ターゲットマッチの該当スロット (A or B) の左端中央
+        const targetSlotEl = targetMatchEl.querySelector(`.b-slot[data-slot-key="${slotKey}"]`) || targetMatchEl;
+        const dstRect = targetSlotEl.getBoundingClientRect();
+        const x2 = Math.round((dstRect.left - gridRect.left) * 10) / 10;
+        const y2 = Math.round((dstRect.top + dstRect.height / 2 - gridRect.top) * 10) / 10;
+
+        if (x2 <= x1) return;
+
+        // 直角折れ線（コーナーを少し面取りしたサイバーHUD風オルソゴナルパス）
+        const midX = Math.round(((x1 + x2) / 2) * 10) / 10;
+        const dy = y2 - y1;
+        const absDy = Math.abs(dy);
+        const r = Math.min(6, Math.floor((x2 - x1) / 4), Math.floor(absDy / 2));
+
+        let d;
+        if (absDy < 1.5 || r <= 1) {
+          d = `M ${x1} ${y1} L ${x2} ${y2}`;
+        } else {
+          const dirY = dy > 0 ? 1 : -1;
+          d = [
+            `M ${x1} ${y1}`,
+            `L ${midX - r} ${y1}`,
+            `Q ${midX} ${y1} ${midX} ${y1 + dirY * r}`,
+            `L ${midX} ${y2 - dirY * r}`,
+            `Q ${midX} ${y2} ${midX + r} ${y2}`,
+            `L ${x2} ${y2}`,
+          ].join(' ');
+        }
+
+        const isInactiveTarget = targetMatch.status === 'inactive';
+        basePaths.push(
+          `<path class="b-conn-base ${isLosersGrid ? 'is-losers' : ''} ${isInactiveTarget ? 'is-inactive' : ''}" d="${d}" />`
+        );
+
+        // ソースの試合が決着しており、チームが次枠へ進出しているか判定
+        let advancedTeamIndex = null;
+        if (sourceDef.type === 'WINNER_OF' && (srcMatch.status === 'completed' || srcMatch.status === 'bye')) {
+          advancedTeamIndex = srcMatch.winnerTeamIndex;
+        } else if (sourceDef.type === 'LOSER_OF' && srcMatch.status === 'completed') {
+          advancedTeamIndex = srcMatch.loserTeamIndex;
+        }
+
+        // Grand Finals Reset (GF-M2) が inactive の場合はアクティブ線を描かない
+        if (isInactiveTarget) {
+          advancedTeamIndex = null;
+        }
+
+        if (advancedTeamIndex !== null && advancedTeamIndex !== undefined) {
+          const team = teams[advancedTeamIndex];
+          const color = team?.color || (isLosersGrid ? 'var(--amber)' : 'var(--green)');
+          const isAutoBye = srcMatch.status === 'bye' && srcMatch.isAutoResolved;
+
+          // 直前のスナップショットと比較して「今まさに勝敗が決まって進出したライン」かどうか判定
+          let isJustAdvanced = false;
+          if (isSameTournament && prevSnap.matches[srcId]) {
+            const prevSrc = prevSnap.matches[srcId];
+            if (sourceDef.type === 'WINNER_OF') {
+              isJustAdvanced = prevSrc.status !== 'completed' || prevSrc.winnerTeamIndex !== advancedTeamIndex;
+            } else if (sourceDef.type === 'LOSER_OF') {
+              isJustAdvanced = prevSrc.status !== 'completed' || prevSrc.loserTeamIndex !== advancedTeamIndex;
+            }
+          }
+
+          const cls = [
+            'b-conn-active',
+            isAutoBye ? 'is-bye-advance' : '',
+            isJustAdvanced ? 'is-just-advanced-line' : '',
+          ].filter(Boolean).join(' ');
+
+          // pathLength="100" を指定することで、実ピクセル長に依存せず stroke-dasharray: 100 で0%→100%伸長アニメーションを実現
+          activePaths.push(`
+            <path class="${cls}" d="${d}" pathLength="100" style="--conn-color:${color}" />
+            <circle class="b-conn-dot ${isJustAdvanced ? 'is-just-advanced-dot' : ''}" cx="${x2}" cy="${y2}" r="3.2" style="--conn-color:${color}" />
+          `);
+        }
+      };
+
+      checkAndBuildConnector(targetMatch.sourceA, 'A');
+      checkAndBuildConnector(targetMatch.sourceB, 'B');
+    }
+
+    svgEl.innerHTML = basePaths.join('') + activePaths.join('');
+  });
 }

@@ -377,6 +377,237 @@ export class AnimationManager {
     if (this.rafId) cancelAnimationFrame(this.rafId);
     if (this.ctx && this.canvas) this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
   }
+
+  /**
+   * トーナメント作成・ランダム振り分け演出（BRACKET INITIALIZING + 1回戦スロット高速シャッフル＆順次ロックオン）
+   * @param {HTMLElement} mountEl - トーナメント表のマウント要素
+   * @param {Array} teams - state.teams
+   */
+  async playTournamentCreation(mountEl, teams = []) {
+    if (!mountEl) return;
+
+    // 既存のバナーがあれば除去
+    const prevBanner = document.querySelector('.bracket-boot-banner');
+    if (prevBanner) prevBanner.remove();
+
+    // 1. サイバーHUD「BRACKET INITIALIZING」カットインバナーを表示
+    const banner = document.createElement('div');
+    banner.className = 'bracket-boot-banner';
+    banner.setAttribute('aria-hidden', 'true');
+    banner.innerHTML = `
+      <div class="bb-scanline"></div>
+      <div class="bb-inner">
+        <div class="bb-kicker">DOUBLE ELIMINATION SYSTEM // SEEDING PROTOCOL</div>
+        <div class="bb-title">BRACKET INITIALIZING</div>
+        <div class="bb-sub">SHUFFLING &amp; DEPLOYING ${teams.length} UNITS...</div>
+      </div>
+    `;
+    document.body.appendChild(banner);
+    setTimeout(() => banner.classList.add('is-leaving'), 850);
+    setTimeout(() => banner.remove(), 1250);
+
+    // 2. トーナメントツリー全体のカードにスタガー登場クラスを付与
+    mountEl.classList.remove('is-bracket-creating');
+    void mountEl.offsetWidth;
+    mountEl.classList.add('is-bracket-creating');
+
+    const allMatches = Array.from(mountEl.querySelectorAll('.b-match'));
+    allMatches.forEach((card, idx) => {
+      card.style.setProperty('--match-stagger', `${Math.min(idx * 28, 520)}ms`);
+    });
+
+    // 3. Winners Round 1（およびBYE自動進出の初期スロット）のチーム名をルーレットシャッフル → 順次ロックオン
+    const r1Slots = Array.from(
+      mountEl.querySelectorAll('.b-section-winners .b-round-col[data-round="1"] .b-slot.is-team')
+    );
+
+    if (r1Slots.length > 0 && teams.length >= 2) {
+      const slotStates = r1Slots.map((slotEl) => {
+        const nameEl = slotEl.querySelector('.b-slot-name');
+        const emblemEl = slotEl.querySelector('.b-slot-emblem');
+        return {
+          slotEl,
+          nameEl,
+          emblemEl,
+          finalName: nameEl ? nameEl.textContent : '',
+          finalLetter: emblemEl ? emblemEl.textContent : '',
+          finalColor: slotEl.style.getPropertyValue('--team-color'),
+          locked: false,
+        };
+      });
+
+      slotStates.forEach(s => s.slotEl.classList.add('is-seed-shuffling'));
+
+      const start = performance.now();
+      const totalDuration = Math.min(420 + slotStates.length * 95, 1300);
+      let lastTick = 0;
+
+      await new Promise((resolve) => {
+        const frame = (now) => {
+          const elapsed = now - start;
+          const progress = Math.min(elapsed / totalDuration, 1);
+
+          // 順番にスロットをロックオン確定させる
+          slotStates.forEach((s, i) => {
+            const lockThreshold = ((i + 1) / slotStates.length) * 0.88 + 0.1;
+            if (!s.locked && progress >= lockThreshold) {
+              s.locked = true;
+              s.slotEl.classList.remove('is-seed-shuffling');
+              s.slotEl.classList.add('is-seed-locked');
+              if (s.nameEl) s.nameEl.textContent = s.finalName;
+              if (s.emblemEl) s.emblemEl.textContent = s.finalLetter;
+              if (s.finalColor) s.slotEl.style.setProperty('--team-color', s.finalColor);
+              sound.playDecodeBlip();
+            }
+          });
+
+          // 未確定のスロットは高速でチーム名をシャッフル表示
+          if (now - lastTick > 48) {
+            lastTick = now;
+            let anyUnlocked = false;
+            slotStates.forEach((s) => {
+              if (s.locked) return;
+              anyUnlocked = true;
+              const randTeam = teams[Math.floor(Math.random() * teams.length)];
+              if (randTeam) {
+                if (s.nameEl) s.nameEl.textContent = randTeam.name;
+                if (s.emblemEl) s.emblemEl.textContent = randTeam.letter;
+              }
+            });
+            if (anyUnlocked) {
+              sound.playTick(progress * 0.5);
+            }
+          }
+
+          if (progress < 1) {
+            requestAnimationFrame(frame);
+          } else {
+            slotStates.forEach((s) => {
+              s.slotEl.classList.remove('is-seed-shuffling');
+              s.slotEl.classList.add('is-seed-locked');
+              if (s.nameEl) s.nameEl.textContent = s.finalName;
+              if (s.emblemEl) s.emblemEl.textContent = s.finalLetter;
+              if (s.finalColor) s.slotEl.style.setProperty('--team-color', s.finalColor);
+            });
+            sound.playLockOn();
+            resolve();
+          }
+        };
+        requestAnimationFrame(frame);
+      });
+    }
+
+    setTimeout(() => {
+      mountEl.classList.remove('is-bracket-creating');
+      mountEl.querySelectorAll('.is-seed-locked').forEach(el => el.classList.remove('is-seed-locked'));
+    }, 900);
+  }
+
+  /**
+   * 優勝チーム決定時のフルスクリーン祝福演出（GRAND CHAMPION カットイン + 紙吹雪パーティクル）
+   * @param {Object} team - 優勝チーム
+   */
+  playChampionCelebration(team) {
+    if (!team) return;
+    this.stopFinale();
+    this.finaleRunning = true;
+
+    // 既存のカットインがあれば削除
+    const prev = document.querySelector('.champion-cutin-overlay');
+    if (prev) prev.remove();
+
+    const members = (team.slots || [])
+      .map(s => s.player?.name)
+      .filter(Boolean)
+      .join('  /  ');
+
+    const el = document.createElement('div');
+    el.className = 'champion-cutin-overlay';
+    el.style.setProperty('--team-color', team.color || '#ffc23d');
+    el.innerHTML = `
+      <div class="cc-flash"></div>
+      <div class="cc-backdrop"></div>
+      <div class="cc-card panel">
+        <div class="cc-crown">🏆 TOURNAMENT GRAND CHAMPION 🏆</div>
+        <div class="cc-main">
+          <div class="cc-emblem">${escapeHtml(team.letter || '★')}</div>
+          <div class="cc-info">
+            <div class="cc-team-name">${escapeHtml(team.name)}</div>
+            <div class="cc-members">${escapeHtml(members)}</div>
+          </div>
+        </div>
+        <div class="cc-hint">CLICK OR PRESS ANY KEY TO CONTINUE</div>
+      </div>
+    `;
+    document.body.appendChild(el);
+    this.finaleEl = el;
+
+    // 紙吹雪パーティクルをキャンバスで再生
+    this.startConfettiParticles(team.color || '#ffc23d');
+
+    const dismiss = () => {
+      if (!el.parentNode || el.classList.contains('is-leaving')) return;
+      el.classList.add('is-leaving');
+      setTimeout(() => {
+        if (el.parentNode) el.remove();
+      }, 450);
+    };
+
+    el.addEventListener('click', dismiss);
+    this.finaleTimer = setTimeout(dismiss, 4600);
+  }
+
+  /**
+   * 優勝祝福用のサイバー紙吹雪パーティクル
+   */
+  startConfettiParticles(teamColor = '#00e5ff') {
+    if (!this.canvas || !this.ctx) return;
+    this.resizeCanvas();
+    const colors = [teamColor, '#00e5ff', '#3dffa8', '#ffc23d', '#ffffff'];
+    this.particles = Array.from({ length: 90 }, () => ({
+      x: Math.random() * this.canvas.width,
+      y: -20 - Math.random() * this.canvas.height * 0.5,
+      vx: (Math.random() - 0.5) * 4,
+      vy: 2.2 + Math.random() * 4.5,
+      size: 5 + Math.random() * 7,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      angle: Math.random() * Math.PI * 2,
+      spin: (Math.random() - 0.5) * 0.16,
+    }));
+
+    const start = performance.now();
+    const loop = (now) => {
+      if (!this.finaleRunning || !this.ctx || !this.canvas) return;
+      const elapsed = now - start;
+      this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+      for (const p of this.particles) {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.angle += p.spin;
+        if (p.y > this.canvas.height + 20 && elapsed < 3500) {
+          p.y = -15;
+          p.x = Math.random() * this.canvas.width;
+        }
+        this.ctx.save();
+        this.ctx.translate(p.x, p.y);
+        this.ctx.rotate(p.angle);
+        this.ctx.fillStyle = p.color;
+        this.ctx.shadowColor = p.color;
+        this.ctx.shadowBlur = 8;
+        this.ctx.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2);
+        this.ctx.restore();
+      }
+
+      if (elapsed < 5000) {
+        this.rafId = requestAnimationFrame(loop);
+      } else {
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+      }
+    };
+    if (this.rafId) cancelAnimationFrame(this.rafId);
+    this.rafId = requestAnimationFrame(loop);
+  }
 }
 
 export const animation = new AnimationManager();

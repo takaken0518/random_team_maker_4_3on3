@@ -2832,13 +2832,16 @@ body.hide-fighter .player-row {
 }
 
 .b-tree-grid {
+  position: relative;
   display: flex;
   align-items: stretch;
-  gap: 28px;
+  gap: 36px;
   min-width: max-content;
 }
 
 .b-round-col {
+  position: relative;
+  z-index: 1;
   width: 286px;
   flex-shrink: 0;
   display: flex;
@@ -2877,20 +2880,101 @@ body.hide-fighter .player-row {
   align-items: center;
 }
 
-/* ラウンド間の接続ライン風アクセント */
-.b-round-col:not(:last-child) .b-match-cell::after {
-  content: '';
+/* トーナメントブロック間を結ぶSVG接続線レイヤー */
+.b-connectors-svg {
   position: absolute;
-  right: -20px;
-  top: 50%;
-  width: 16px;
-  height: 1px;
-  background: rgba(0, 229, 255, 0.25);
+  inset: 0;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
+  z-index: 0;
+  overflow: visible;
 }
 
-.b-section-losers .b-round-col:not(:last-child) .b-match-cell::after {
-  background: rgba(255, 194, 61, 0.25);
+.b-conn-base {
+  fill: none;
+  stroke: rgba(0, 229, 255, 0.24);
+  stroke-width: 1.8px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.b-conn-base.is-losers {
+  stroke: rgba(255, 194, 61, 0.22);
+}
+
+.b-conn-base.is-inactive {
+  stroke-dasharray: 4 4;
+  opacity: 0.45;
+}
+
+.b-conn-active {
+  fill: none;
+  stroke: var(--conn-color, var(--green));
+  stroke-width: 3px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 6px var(--conn-color, var(--green)));
+}
+
+.b-conn-active.is-bye-advance {
+  stroke-width: 2.2px;
+  opacity: 0.78;
+}
+
+/* 勝利確定時にブロックから次のブロックへ線が伸びるアニメーション */
+.b-conn-active.is-just-advanced-line {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: bracketLineAdvance 0.68s cubic-bezier(0.22, 0.85, 0.32, 1) forwards;
+}
+
+@keyframes bracketLineAdvance {
+  0% {
+    stroke-dashoffset: 100;
+    stroke-width: 4.5px;
+    filter: drop-shadow(0 0 14px #fff) drop-shadow(0 0 20px var(--conn-color, var(--green)));
+  }
+  75% {
+    stroke-width: 3.6px;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    stroke-width: 3px;
+    filter: drop-shadow(0 0 6px var(--conn-color, var(--green)));
+  }
+}
+
+.b-conn-dot {
+  fill: var(--conn-color, var(--green));
+  filter: drop-shadow(0 0 6px var(--conn-color, var(--green)));
+}
+
+.b-conn-dot.is-just-advanced-dot {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: bracketDotArrive 0.38s cubic-bezier(0.2, 1.5, 0.4, 1) 0.52s forwards;
+}
+
+@keyframes bracketDotArrive {
+  0% {
+    opacity: 0;
+    transform: scale(0.2);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1.75);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* トーナメント作成時は接続線もフェードイン */
+.is-bracket-creating .b-connectors-svg {
+  animation: bbFadeIn 0.55s ease-out 0.2s both;
 }
 
 /* マッチカード */
@@ -3240,4 +3324,516 @@ body.obs-bracket-page {
   outline-offset: -2px;
   background: linear-gradient(90deg, rgba(61, 255, 168, 0.25), rgba(0, 229, 255, 0.12)) !important;
   box-shadow: 0 0 14px rgba(61, 255, 168, 0.35) inset;
+}
+
+/* ==========================================================================
+   TOURNAMENT CREATION & PROGRESSION ANIMATIONS
+   - トーナメント作成時：サイバーカットインバナー + ツリーカード連鎖展開 + 1回戦シード高速シャッフル＆ロックオン
+   - トーナメント進行時：勝者決定フラッシュ、次ラウンド進出スライドイン、Losers降格パルス、スコアポップ、GFリセット＆優勝演出
+   ========================================================================== */
+
+/* 1. トーナメント作成カットインバナー */
+.bracket-boot-banner {
+  position: fixed;
+  inset: 0;
+  z-index: 450;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(ellipse at center, rgba(0, 229, 255, 0.14) 0%, rgba(2, 8, 16, 0.55) 75%);
+  animation: bbFadeIn 0.2s ease-out forwards;
+}
+
+.bracket-boot-banner.is-leaving {
+  animation: bbFadeOut 0.38s ease-in forwards;
+}
+
+@keyframes bbFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes bbFadeOut {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(1.04); }
+}
+
+.bb-scanline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, var(--cyan), var(--green), var(--cyan), transparent);
+  box-shadow: 0 0 22px var(--cyan);
+  animation: bbScanSweep 0.85s cubic-bezier(.2, .8, .3, 1) forwards;
+}
+
+@keyframes bbScanSweep {
+  0% { top: 18%; opacity: 0; }
+  20% { opacity: 1; }
+  80% { opacity: 1; }
+  100% { top: 82%; opacity: 0; }
+}
+
+.bb-inner {
+  position: relative;
+  padding: 20px 48px;
+  background: rgba(3, 12, 22, 0.94);
+  border-top: 2px solid var(--cyan);
+  border-bottom: 2px solid var(--green);
+  box-shadow: 0 0 42px rgba(0, 229, 255, 0.38), inset 0 0 24px rgba(0, 229, 255, 0.14);
+  clip-path: polygon(18px 0, 100% 0, calc(100% - 18px) 100%, 0 100%);
+  text-align: center;
+  animation: bbCardSlam 0.32s cubic-bezier(.16, 1.25, .36, 1) forwards;
+}
+
+@keyframes bbCardSlam {
+  0% {
+    opacity: 0;
+    transform: scaleX(0.35) scaleY(0.8);
+  }
+  100% {
+    opacity: 1;
+    transform: scaleX(1) scaleY(1);
+  }
+}
+
+.bb-kicker {
+  font-family: var(--font-hud);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  color: var(--green);
+  margin-bottom: 4px;
+}
+
+.bb-title {
+  font-family: var(--font-display);
+  font-size: clamp(22px, 4vw, 38px);
+  font-weight: 900;
+  letter-spacing: 0.2em;
+  color: #fff;
+  text-shadow: 0 0 18px var(--cyan), 0 0 34px rgba(0, 229, 255, 0.45);
+}
+
+.bb-sub {
+  font-family: var(--font-hud);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: var(--text-fighter);
+  margin-top: 4px;
+}
+
+/* 2. トーナメントツリー生成時のカード連鎖展開 & シードシャッフル */
+.is-bracket-creating .b-section {
+  animation: bracketSectionBoot 0.45s cubic-bezier(.2, .9, .3, 1) both;
+}
+
+.is-bracket-creating .b-section-losers {
+  animation-delay: 0.12s;
+}
+
+@keyframes bracketSectionBoot {
+  0% {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.is-bracket-creating .b-match {
+  animation: bracketMatchSpawn 0.42s cubic-bezier(.2, 1.15, .35, 1) both;
+  animation-delay: var(--match-stagger, 0ms);
+}
+
+@keyframes bracketMatchSpawn {
+  0% {
+    opacity: 0;
+    transform: translateX(-16px) scale(0.96);
+    border-color: var(--cyan);
+    box-shadow: 0 0 18px rgba(0, 229, 255, 0.45);
+  }
+  70% {
+    opacity: 1;
+    transform: translateX(2px) scale(1.01);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* 1回戦シードのルーレットシャッフル中 */
+.b-slot.is-seed-shuffling {
+  background: linear-gradient(90deg, rgba(0, 229, 255, 0.24), rgba(0, 229, 255, 0.05)) !important;
+  border-left-color: var(--cyan) !important;
+}
+
+.b-slot.is-seed-shuffling .b-slot-name {
+  color: var(--cyan);
+  text-shadow: 0 0 10px var(--cyan);
+}
+
+/* 1回戦シードがロックオン確定した瞬間 */
+.b-slot.is-seed-locked {
+  animation: seedSlotLock 0.48s cubic-bezier(.18, 1.3, .35, 1);
+}
+
+@keyframes seedSlotLock {
+  0% {
+    transform: scale(1.04) translateX(6px);
+    background: linear-gradient(90deg, rgba(61, 255, 168, 0.5), rgba(0, 229, 255, 0.25));
+    box-shadow: 0 0 22px rgba(61, 255, 168, 0.55);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+/* 3. トーナメント進行時アニメーション（勝敗決定・次ラウンド進出・Losers降格・スコア更新） */
+
+/* 試合決着カードフラッシュ */
+.b-match.is-just-completed {
+  animation: matchCompletePulse 0.65s cubic-bezier(.2, .9, .3, 1);
+}
+
+@keyframes matchCompletePulse {
+  0% {
+    border-color: #fff;
+    box-shadow: 0 0 28px rgba(61, 255, 168, 0.75), inset 0 0 18px rgba(61, 255, 168, 0.35);
+    transform: scale(1.025);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* 勝利したスロットのハイライトスイープ */
+.b-slot.is-just-won {
+  position: relative;
+  overflow: hidden;
+  animation: slotWinBurst 0.55s cubic-bezier(.18, 1.3, .35, 1);
+}
+
+.b-slot.is-just-won::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.65), rgba(61, 255, 168, 0.5), transparent);
+  animation: slotWinSweep 0.55s ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes slotWinBurst {
+  0% {
+    transform: scale(1.04);
+    box-shadow: 0 0 24px var(--team-color, var(--green));
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes slotWinSweep {
+  0% { transform: translateX(-100%); opacity: 1; }
+  100% { transform: translateX(100%); opacity: 0; }
+}
+
+.b-slot.is-just-won .b-win-tag {
+  animation: winTagPop 0.45s cubic-bezier(.2, 1.5, .4, 1);
+}
+
+@keyframes winTagPop {
+  0% { transform: scale(0.2); opacity: 0; }
+  70% { transform: scale(1.25); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* 敗北したスロットの減衰 */
+.b-slot.is-just-lost {
+  animation: slotLoseDim 0.4s ease-out;
+}
+
+@keyframes slotLoseDim {
+  0% { opacity: 1; transform: translateX(0); }
+  40% { transform: translateX(-4px); }
+  100% { opacity: 0.45; transform: translateX(0); }
+}
+
+/* 次ラウンドへ進出したチームのスライドイン＆グロー */
+.b-slot.is-just-advanced {
+  position: relative;
+  overflow: hidden;
+  animation: slotAdvanceIn 0.65s cubic-bezier(.16, 1.25, .35, 1);
+}
+
+.b-slot.is-just-advanced::before {
+  content: 'ADVANCE ≫';
+  position: absolute;
+  right: 10px;
+  top: 4px;
+  font-family: var(--font-display);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  color: var(--cyan);
+  text-shadow: 0 0 8px var(--cyan);
+  pointer-events: none;
+  animation: badgeFadeOut 1.1s ease-out forwards;
+}
+
+@keyframes slotAdvanceIn {
+  0% {
+    opacity: 0;
+    transform: translateX(-24px) scale(0.96);
+    background: linear-gradient(90deg, rgba(0, 229, 255, 0.45), rgba(61, 255, 168, 0.25));
+    box-shadow: 0 0 26px rgba(0, 229, 255, 0.65);
+  }
+  60% {
+    opacity: 1;
+    transform: translateX(3px) scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Losers Bracket に降りてきたチームのアンバーパルス登場 */
+.b-slot.is-just-dropped-loser {
+  position: relative;
+  overflow: hidden;
+  animation: slotDropLoserIn 0.7s cubic-bezier(.16, 1.2, .35, 1);
+}
+
+.b-slot.is-just-dropped-loser::before {
+  content: 'DROP TO LOSERS ↘';
+  position: absolute;
+  right: 10px;
+  top: 4px;
+  font-family: var(--font-display);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  color: var(--amber);
+  text-shadow: 0 0 8px var(--amber);
+  pointer-events: none;
+  animation: badgeFadeOut 1.2s ease-out forwards;
+}
+
+@keyframes slotDropLoserIn {
+  0% {
+    opacity: 0;
+    transform: translateY(-18px) scale(0.96);
+    background: linear-gradient(90deg, rgba(255, 194, 61, 0.45), rgba(255, 77, 109, 0.2));
+    box-shadow: 0 0 24px rgba(255, 194, 61, 0.6);
+  }
+  65% {
+    opacity: 1;
+    transform: translateY(2px) scale(1.015);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes badgeFadeOut {
+  0%, 55% { opacity: 1; transform: translateX(0); }
+  100% { opacity: 0; transform: translateX(8px); }
+}
+
+/* 両チームが揃って READY になった試合カードのパルス */
+.b-match.is-just-ready {
+  animation: matchReadyPulse 0.75s ease-out;
+}
+
+@keyframes matchReadyPulse {
+  0% {
+    border-color: var(--cyan);
+    box-shadow: 0 0 26px rgba(0, 229, 255, 0.65);
+  }
+  100% {
+    border-color: rgba(0, 229, 255, 0.55);
+  }
+}
+
+/* スコア増減時のバウンスポップ */
+.is-score-pop {
+  display: inline-block;
+  animation: scoreNumberPop 0.35s cubic-bezier(.2, 1.6, .4, 1);
+}
+
+@keyframes scoreNumberPop {
+  0% {
+    transform: scale(1.55);
+    color: var(--green);
+    text-shadow: 0 0 12px var(--green);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* Grand Finals Reset (GF2) 解放演出 */
+.b-match.is-just-reset-activated {
+  animation: gfResetActivate 0.9s cubic-bezier(.18, 1.3, .35, 1);
+}
+
+@keyframes gfResetActivate {
+  0% {
+    opacity: 0.3;
+    transform: scale(0.92);
+    border-color: var(--red);
+    box-shadow: 0 0 36px rgba(255, 77, 109, 0.85), inset 0 0 22px rgba(255, 194, 61, 0.5);
+  }
+  55% {
+    transform: scale(1.04);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* 4. 優勝決定時のフルスクリーン祝福カットイン */
+.champion-cutin-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 460;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  cursor: pointer;
+  animation: ccFadeIn 0.28s ease-out forwards;
+}
+
+.champion-cutin-overlay.is-leaving {
+  animation: ccFadeOut 0.42s ease-in forwards;
+  pointer-events: none;
+}
+
+@keyframes ccFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes ccFadeOut {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(1.05); }
+}
+
+.cc-flash {
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  pointer-events: none;
+  animation: rfFlash 0.55s ease-out forwards;
+}
+
+.cc-backdrop {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at center, color-mix(in srgb, var(--team-color, var(--amber)) 28%, rgba(4, 14, 24, 0.86)) 0%, rgba(2, 6, 12, 0.92) 75%);
+  backdrop-filter: blur(8px);
+}
+
+.cc-card {
+  --cut: 20px;
+  position: relative;
+  z-index: 2;
+  max-width: 780px;
+  width: 100%;
+  padding: 34px 44px;
+  border: 2px solid var(--team-color, var(--amber));
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--team-color, var(--amber)) 24%, rgba(5, 16, 28, 0.96)) 0%, rgba(3, 10, 18, 0.96) 70%);
+  box-shadow:
+    0 0 60px -6px color-mix(in srgb, var(--team-color, var(--amber)) 65%, transparent),
+    inset 0 0 32px color-mix(in srgb, var(--team-color, var(--amber)) 22%, transparent);
+  text-align: center;
+  animation: ccCardPop 0.48s cubic-bezier(.16, 1.3, .36, 1) forwards;
+}
+
+@keyframes ccCardPop {
+  0% {
+    opacity: 0;
+    transform: scale(0.78) translateY(24px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.cc-crown {
+  font-family: var(--font-display);
+  font-size: clamp(13px, 2vw, 17px);
+  font-weight: 900;
+  letter-spacing: 0.32em;
+  color: var(--amber);
+  text-shadow: 0 0 16px rgba(255, 194, 61, 0.75);
+  margin-bottom: 18px;
+}
+
+.cc-main {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.cc-emblem {
+  width: 76px;
+  height: 76px;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-display);
+  font-size: 36px;
+  font-weight: 900;
+  color: var(--bg-0);
+  background: var(--team-color, var(--amber));
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  box-shadow: 0 0 28px var(--team-color, var(--amber));
+  flex-shrink: 0;
+}
+
+.cc-info {
+  text-align: left;
+}
+
+.cc-team-name {
+  font-family: var(--font-display), var(--font-body);
+  font-size: clamp(28px, 5vw, 52px);
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: 0.08em;
+  text-shadow: 0 0 24px var(--team-color, var(--amber)), 0 2px 6px rgba(0, 0, 0, 0.8);
+  line-height: 1.15;
+}
+
+.cc-members {
+  font-size: clamp(15px, 2.2vw, 20px);
+  font-weight: 700;
+  color: var(--text-fighter);
+  margin-top: 6px;
+  letter-spacing: 0.06em;
+}
+
+.cc-hint {
+  margin-top: 24px;
+  font-family: var(--font-hud);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  color: var(--text-sub);
+  opacity: 0.8;
 }

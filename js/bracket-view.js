@@ -14,7 +14,9 @@ import { initializeDraft } from './draft-engine.js';
 import { generateAndSaveTournament, updateMatchResult, swapTournamentSlots } from './tournament-engine.js';
 import {
   renderTournamentBracket, encodeTournamentSnapshot, decodeTournamentSnapshot,
+  captureBracketAnimationSnapshot, applyBracketProgressionAnimations, renderBracketConnectors,
 } from './bracket-renderer.js';
+import { animation } from './animation.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -48,6 +50,7 @@ let isInteractive = params.get('hud') !== '0';
 const hideHudParam = params.get('hud') === '0' || Boolean(window.obsstudio);
 
 const embeddedSnapshot = decodeTournamentSnapshot(params.get('data'));
+let lastBracketSnapshot = null;
 
 function resolveTournamentData(state) {
   if (state.tournament && state.teams && state.teams.length >= 2) {
@@ -98,10 +101,22 @@ function render() {
     });
   }
 
+  const prevSnap = lastBracketSnapshot;
   dom.mount.innerHTML = renderTournamentBracket(tournament, teams, {
     interactive: isInteractive,
     filter: filterMode,
   });
+  if (tournament && prevSnap && prevSnap.createdAt === tournament.createdAt) {
+    applyBracketProgressionAnimations(dom.mount, prevSnap, tournament);
+  } else if (tournament && prevSnap && prevSnap.createdAt !== tournament.createdAt) {
+    animation.playTournamentCreation(dom.mount, teams);
+  }
+  renderBracketConnectors(dom.mount, tournament, teams, prevSnap);
+  if (tournament && prevSnap && tournament.championTeamIndex !== null && tournament.championTeamIndex !== prevSnap.championTeamIndex) {
+    const champTeam = teams[tournament.championTeamIndex];
+    if (champTeam) animation.playChampionCelebration(champTeam);
+  }
+  lastBracketSnapshot = captureBracketAnimationSnapshot(tournament);
 }
 
 function init() {
@@ -124,6 +139,11 @@ function init() {
   });
   render();
 
+  window.addEventListener('resize', () => {
+    const { tournament, teams } = resolveTournamentData(store.getState());
+    renderBracketConnectors(dom.mount, tournament, teams, null);
+  });
+
   dom.filterTabs.addEventListener('click', (e) => {
     const btn = e.target.closest('.obs-team-tab');
     if (!btn) return;
@@ -141,9 +161,12 @@ function init() {
     if (hasProgress && !confirm('進行中の試合結果があります。再シャッフルするとリセットされますがよろしいですか？')) {
       return;
     }
+    lastBracketSnapshot = null;
     generateAndSaveTournament({ shuffle: true });
     syncUrlParams();
     render();
+    const { teams } = resolveTournamentData(store.getState());
+    animation.playTournamentCreation(dom.mount, teams);
     showToast('トーナメントをランダム再振り分けしました');
   });
 

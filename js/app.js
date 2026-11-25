@@ -14,6 +14,7 @@ import {
 } from './tournament-engine.js';
 import {
   renderTournamentBracket, encodeTournamentSnapshot,
+  captureBracketAnimationSnapshot, applyBracketProgressionAnimations, renderBracketConnectors,
 } from './bracket-renderer.js';
 import { animation } from './animation.js';
 import { sound } from './audio.js';
@@ -102,6 +103,8 @@ let teamCountTouched = false;
 let lastFocusedBeforeModal = null;
 // 現在のメイン表示モード ('draft' | 'tournament')
 let activeView = 'draft';
+// トーナメント進行差分検知用スナップショット
+let lastBracketSnapshot = null;
 
 function escapeHtml(str) {
   return String(str ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -239,6 +242,13 @@ function switchView(view) {
     dom.tabViewTournament.classList.toggle('is-active', isTournament);
     dom.tabViewTournament.setAttribute('aria-selected', String(isTournament));
   }
+
+  if (isTournament && dom.tournamentBracketMount) {
+    const state = store.getState();
+    requestAnimationFrame(() => {
+      renderBracketConnectors(dom.tournamentBracketMount, state.tournament, state.teams, null);
+    });
+  }
 }
 
 function renderTournamentSection(state) {
@@ -258,7 +268,13 @@ function renderTournamentSection(state) {
     const snap = encodeTournamentSnapshot(state);
     dom.linkObsBracket.href = snap ? `bracket.html?data=${encodeURIComponent(snap)}` : 'bracket.html';
   }
+  const prevSnap = lastBracketSnapshot;
   dom.tournamentBracketMount.innerHTML = renderTournamentBracket(t, state.teams, { interactive: true });
+  if (t && prevSnap && prevSnap.createdAt === t.createdAt) {
+    applyBracketProgressionAnimations(dom.tournamentBracketMount, prevSnap, t);
+  }
+  renderBracketConnectors(dom.tournamentBracketMount, t, state.teams, prevSnap);
+  lastBracketSnapshot = captureBracketAnimationSnapshot(t);
 }
 
 function handleOpenOrCreateTournament({ forceShuffle = false } = {}) {
@@ -269,13 +285,20 @@ function handleOpenOrCreateTournament({ forceShuffle = false } = {}) {
     return;
   }
 
-  if (!state.tournament || forceShuffle) {
+  const isCreatingNew = !state.tournament || forceShuffle;
+  if (isCreatingNew) {
     sound.init();
     sound.playFormation();
+    lastBracketSnapshot = null;
     generateAndSaveTournament({ shuffle: true });
     showToast(`${state.teams.length}チームをランダムに振り分けてトーナメント表を生成しました！`);
   }
   switchView('tournament');
+  if (isCreatingNew && dom.tournamentBracketMount) {
+    const latestState = store.getState();
+    lastBracketSnapshot = captureBracketAnimationSnapshot(latestState.tournament);
+    animation.playTournamentCreation(dom.tournamentBracketMount, latestState.teams);
+  }
 }
 
 function setStageTarget(step, team) {
@@ -671,6 +694,13 @@ function initApp() {
   store.subscribe(renderUI);
   renderUI(store.getState());
 
+  window.addEventListener('resize', () => {
+    if (activeView === 'tournament' && dom.tournamentBracketMount) {
+      const st = store.getState();
+      renderBracketConnectors(dom.tournamentBracketMount, st.tournament, st.teams, null);
+    }
+  });
+
   // 操作バー
   dom.btnDrawNext.addEventListener('click', () => {
     sound.init();
@@ -777,14 +807,24 @@ function initApp() {
       if (winSlotEl) {
         const matchId = winSlotEl.dataset.matchId;
         const winSlot = winSlotEl.dataset.winSlot;
-        const prevChamp = store.getState().tournament?.championTeamIndex;
+        const prevTournament = store.getState().tournament;
+        const prevChamp = prevTournament?.championTeamIndex;
+        const prevNeedsReset = prevTournament?.needsReset;
         sound.init();
         sound.playLockOn();
         const updated = updateMatchResult(matchId, { winnerSlot: winSlot });
-        if (updated && updated.championTeamIndex !== null && updated.championTeamIndex !== prevChamp) {
-          const champTeam = store.getState().teams[updated.championTeamIndex];
-          sound.playFanfare();
-          showToast(`🏆 優勝は「${champTeam?.name || 'TEAM'}」に決定しました！`, 4500);
+        if (updated) {
+          if (updated.needsReset && !prevNeedsReset) {
+            sound.playImpact();
+            showToast('⚡ GRAND FINALS RESET 発動！最終決戦 (GF2) が解放されました！', 3800);
+          } else if (updated.championTeamIndex !== null && updated.championTeamIndex !== prevChamp) {
+            const champTeam = store.getState().teams[updated.championTeamIndex];
+            sound.playFanfare();
+            animation.playChampionCelebration(champTeam);
+            showToast(`🏆 優勝は「${champTeam?.name || 'TEAM'}」に決定しました！`, 4500);
+          } else {
+            sound.playDecodeBlip();
+          }
         }
       }
     });
